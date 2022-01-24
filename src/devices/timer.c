@@ -126,19 +126,20 @@ timer_sleep (int64_t ticks)
 
   struct sema_thread_pair *pair = malloc(sizeof(struct sema_thread_pair));
   struct thread *current_alarm_thread = thread_current();
-  struct semaphore sleep_sema = pair->sema;
-  
 
-  sema_init(&sleep_sema, 1);
-  
+  struct semaphore sleep_sema;
+  sema_init(&sleep_sema, 0);
+
+  pair->sema = sleep_sema;
   pair->alarm_due_time = start+ticks;
   pair->t = current_alarm_thread;
+
   // pair->sema = sleep_sema;
 
   list_insert_ordered (&sleeper_list, &pair->elem, compare_ticks, NULL);
   
   /* Put current thread to sleep*/
-  sema_down(&sleep_sema);
+  sema_down(&pair->sema);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -223,7 +224,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
   while (ready && list_size (&sleeper_list) != 0) 
     {
       
-      struct list_elem *e = list_front (&sleeper_list);
+      struct list_elem *e = list_begin (&sleeper_list);
       struct sema_thread_pair *h = list_entry (e, struct sema_thread_pair, elem);
       struct semaphore sleep_sema = h->sema;
       //printf("SLEEPER_LIST: %d", h->t->tid);
