@@ -7,6 +7,15 @@
 /* Number of timer interrupts per second. */
 #define TIMER_FREQ 100
 
+ struct sema_thread_pair
+ {
+  int64_t alarm_due_time;             /* Time when the thread alarm is due. */ 
+  struct thread *t;                   /* Thread to be awakened. */
+  struct semaphore *sema;              /* Semaphore for the thread. */
+  struct list_elem elem;  
+ };
+
+
 void timer_init (void);
 void timer_calibrate (void);
 
