@@ -3,6 +3,7 @@
 
 #include <round.h>
 #include <stdint.h>
+#include <list.h>
 
 /* Number of timer interrupts per second. */
 #define TIMER_FREQ 100
@@ -11,7 +12,7 @@
  {
   int64_t alarm_due_time;             /* Time when the thread alarm is due. */ 
   struct thread *t;                   /* Thread to be awakened. */
-  struct semaphore *sema;              /* Semaphore for the thread. */
+  struct semaphore *sema;             /* Semaphore for the thread. */
   struct list_elem elem;  
  };
 

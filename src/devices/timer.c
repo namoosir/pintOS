@@ -19,7 +19,7 @@
 
 /* A list for storing the sleeping thread and its 
   corresponding semaphore. */
-static struct list *sleeper_list;
+static struct list sleeper_list;
 
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
@@ -43,7 +43,7 @@ timer_init (void)
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 
   /* timer_init is called once, so we initaizlize all the lists here */
-  list_init (sleeper_list);
+  list_init (&sleeper_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -94,7 +94,7 @@ timer_elapsed (int64_t then)
 list_less_func compare_ticks_func;
 
 bool
-compare_ticks_func(struct list_elem *a, struct list_elem *b, void *aux)
+compare_ticks_func(const struct list_elem *a, const struct list_elem *b, void *aux)
 {
 
   struct sema_thread_pair *pair1 = list_entry (a, struct sema_thread_pair, elem);
@@ -117,14 +117,13 @@ timer_sleep (int64_t ticks)
   struct sema_thread_pair *pair;
   struct thread *current_alarm_thread = thread_current();
   struct semaphore *sleep_sema;
-
+  sema_init(sleep_sema, 1);
+  
   pair->alarm_due_time = start+ticks;
   pair->t = current_alarm_thread;
   pair->sema = sleep_sema;
 
-  sema_init(sleep_sema, 1);
-  
-  list_insert_ordered (sleeper_list, current_alarm_thread, compare_ticks, NULL);
+  list_insert_ordered (&sleeper_list, &(pair->elem), compare_ticks, NULL);
   
   /* Put current thread to sleep*/
   sema_down(sleep_sema);
@@ -220,12 +219,12 @@ timer_interrupt (struct intr_frame *args UNUSED)
   /* Wake up all threads that reached the alarm_due_time */
   while (ready) 
     {
-      struct list_elem *e = list_head (sleeper_list);
+      struct list_elem *e = list_head (&sleeper_list);
       struct sema_thread_pair *h = list_entry (e, struct sema_thread_pair, elem);
       if (ticks == h->alarm_due_time)
         {
           sema_up(h->sema);
-          list_pop_front(sleeper_list);
+          list_pop_front(&sleeper_list);
           continue;
         }
       ready = false;
