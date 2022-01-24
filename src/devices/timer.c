@@ -116,17 +116,19 @@ timer_sleep (int64_t ticks)
 
   struct sema_thread_pair *pair;
   struct thread *current_alarm_thread = thread_current();
-  struct semaphore *sleep_sema;
-  sema_init(sleep_sema, 1);
+  struct semaphore sleep_sema = pair->sema;
+  
+
+  sema_init(&sleep_sema, 1);
   
   pair->alarm_due_time = start+ticks;
   pair->t = current_alarm_thread;
-  pair->sema = sleep_sema;
+  // pair->sema = sleep_sema;
 
   list_insert_ordered (&sleeper_list, &(pair->elem), compare_ticks, NULL);
   
   /* Put current thread to sleep*/
-  sema_down(sleep_sema);
+  sema_down(&sleep_sema);
 
   
   
@@ -221,9 +223,10 @@ timer_interrupt (struct intr_frame *args UNUSED)
     {
       struct list_elem *e = list_head (&sleeper_list);
       struct sema_thread_pair *h = list_entry (e, struct sema_thread_pair, elem);
+      struct semaphore sleep_sema = h->sema;
       if (ticks == h->alarm_due_time)
         {
-          sema_up(h->sema);
+          sema_up(&sleep_sema);
           list_pop_front(&sleeper_list);
           continue;
         }
