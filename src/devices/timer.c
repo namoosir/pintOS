@@ -7,6 +7,7 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "threads/malloc.h"
   
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -114,7 +115,7 @@ timer_sleep (int64_t ticks)
 
   list_less_func* compare_ticks = compare_ticks_func;
 
-  struct sema_thread_pair *pair;
+  struct sema_thread_pair *pair = malloc(sizeof(struct sema_thread_pair));
   struct thread *current_alarm_thread = thread_current();
   struct semaphore sleep_sema = pair->sema;
   
@@ -227,7 +228,8 @@ timer_interrupt (struct intr_frame *args UNUSED)
       if (ticks == h->alarm_due_time)
         {
           sema_up(&sleep_sema);
-          list_pop_front(&sleeper_list);
+          e = list_pop_front(&sleeper_list);
+          free(e);
           continue;
         }
       ready = false;
