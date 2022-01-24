@@ -109,12 +109,16 @@ compare_ticks_func(const struct list_elem *a, const struct list_elem *b, void *a
 void
 timer_sleep (int64_t ticks) 
 {
+  printf("ticks before if: %lld\n", ticks);
 
-  if (ticks < 0){
-    return;
-  }
+  if (ticks <= 0)
+    {
+      return;
+    }
 
   int64_t start = timer_ticks ();
+
+  printf("ticks after if: %lld, start: %lld\n", ticks, start);
 
   ASSERT (intr_get_level () == INTR_ON);
 
@@ -131,19 +135,10 @@ timer_sleep (int64_t ticks)
   pair->t = current_alarm_thread;
   // pair->sema = sleep_sema;
 
-  list_insert_ordered (&sleeper_list, &(pair->elem), compare_ticks, NULL);
+  list_insert_ordered (&sleeper_list, &pair->elem, compare_ticks, NULL);
   
   /* Put current thread to sleep*/
   sema_down(&sleep_sema);
-
-  
-  
-  //get current thread
-  //put in lock
-  //create cond to wake thread later
-  //block
-  //somehow unblock using cond and lock when time is finished
-
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -225,15 +220,17 @@ timer_interrupt (struct intr_frame *args UNUSED)
   struct list_elem *e;
   
   /* Wake up all threads that reached the alarm_due_time */
-  while (ready) 
+  while (ready && list_size (&sleeper_list) != 0) 
     {
-      struct list_elem *e = list_head (&sleeper_list);
+      
+      struct list_elem *e = list_front (&sleeper_list);
       struct sema_thread_pair *h = list_entry (e, struct sema_thread_pair, elem);
       struct semaphore sleep_sema = h->sema;
-      if (ticks == h->alarm_due_time)
+      //printf("SLEEPER_LIST: %d", h->t->tid);
+      if (ticks >= h->alarm_due_time)
         {
-          sema_up(&sleep_sema);
-          e = list_pop_front(&sleeper_list);
+          sema_up (&sleep_sema);
+          e = list_pop_front (&sleeper_list);
           free(e);
           continue;
         }
