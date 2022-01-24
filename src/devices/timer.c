@@ -109,6 +109,11 @@ compare_ticks_func(const struct list_elem *a, const struct list_elem *b, void *a
 void
 timer_sleep (int64_t ticks) 
 {
+
+  if (ticks < 0){
+    return;
+  }
+
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
