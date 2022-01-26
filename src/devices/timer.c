@@ -18,9 +18,9 @@
 #error TIMER_FREQ <= 1000 recommended
 #endif
 
-/* A list for storing the sleeping thread and its 
-  corresponding semaphore. */
-static struct list sleeper_list;
+/* A list for storing the alarm due time and the 
+   semaphore for blocking the current thread. */
+static struct list thread_due_time_list;
 
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
@@ -43,8 +43,8 @@ timer_init (void)
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 
-  /* timer_init is called once, so we initaizlize all the lists here */
-  list_init (&sleeper_list);
+  /* timer_init is called once, so we initaizlize the list here */
+  list_init (&thread_due_time_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -92,16 +92,28 @@ timer_elapsed (int64_t then)
   return timer_ticks () - then;
 }
 
+/* ----------- */
 list_less_func compare_ticks_func;
-
 bool
 compare_ticks_func(const struct list_elem *a, const struct list_elem *b, void *aux)
 {
 
-  struct sema_thread_pair *pair1 = list_entry (a, struct sema_thread_pair, elem);
-  struct sema_thread_pair *pair2 = list_entry (b, struct sema_thread_pair, elem);
-  
-  return pair1->alarm_due_time < pair2->alarm_due_time;
+  if(aux == NULL){
+    struct thread *t1 = list_entry (a, struct thread, elem);
+    struct thread *t2 = list_entry (b, struct thread, elem);
+    return t1->alarm_due_time < t2->alarm_due_time;
+  }
+  return NULL;
+}
+
+/* ----------- */
+void
+thread_due_time_init(struct thread *t, int64_t alarm_due_time)
+{
+  // sema_init(&sema, 0);
+  // t->blocker_sema = sema;
+
+  t->alarm_due_time = alarm_due_time;
 }
 
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
@@ -109,7 +121,9 @@ compare_ticks_func(const struct list_elem *a, const struct list_elem *b, void *a
 void
 timer_sleep (int64_t ticks) 
 {
-  printf("ticks before if: %lld\n", ticks);
+  //printf("ticks before if: %lld\n", ticks);
+
+  ASSERT (intr_get_level () == INTR_ON);
 
   if (ticks <= 0)
     {
@@ -118,28 +132,28 @@ timer_sleep (int64_t ticks)
 
   int64_t start = timer_ticks ();
 
-  printf("ticks after if: %lld, start: %lld\n", ticks, start);
-
-  ASSERT (intr_get_level () == INTR_ON);
+  //printf("ticks after if: %lld, start: %lld\n", ticks, start);
 
   list_less_func* compare_ticks = compare_ticks_func;
 
-  struct sema_thread_pair *pair = malloc(sizeof(struct sema_thread_pair));
-  struct thread *current_alarm_thread = thread_current();
+  struct thread *curr_thread = thread_current();
+  //curr_thread->alarm_due_time = start + ticks;
 
-  struct semaphore sleep_sema;
-  sema_init(&sleep_sema, 0);
+  // struct semaphore blocker_sema;
+  // sema_init(&blocker_sema, 0);
+  // curr_thread->blocker_sema = blocker_sema;
 
-  pair->sema = sleep_sema;
-  pair->alarm_due_time = start+ticks;
-  pair->t = current_alarm_thread;
 
-  // pair->sema = sleep_sema;
-
-  list_insert_ordered (&sleeper_list, &pair->elem, compare_ticks, NULL);
+  //struct sema_due_time_node *node = malloc(sizeof(struct sema_due_time_node));
+  //struct semaphore *sleep_sema = malloc(sizeof(struct semaphore));
   
-  /* Put current thread to sleep*/
-  sema_down(&pair->sema);
+  thread_due_time_init(curr_thread, start + ticks);
+
+  list_insert_ordered (&thread_due_time_list, &curr_thread->blockedelem, compare_ticks, NULL);
+  
+  /* Put current thread to sleep */
+  //curr_thread->status = THREAD_BLOCKED;
+  sema_down(&curr_thread->blocker_sema);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -212,32 +226,44 @@ timer_print_stats (void)
   printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
 
+
+/* ----------- */
+struct thread *
+get_first_thread_due_time_node(void)
+{
+  struct list_elem *e = list_front(&thread_due_time_list);
+  struct thread *t = list_entry(e, struct thread, blockedelem);
+  return t;
+}
+
+/* ----------- */
+void
+unblock_sleeping_thread(struct thread *first){
+  if(first != NULL && &first->blocker_sema != NULL){
+    sema_up(&first->blocker_sema);
+  }
+  list_pop_front (&thread_due_time_list);
+}
+
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  bool ready = true;
-  struct list_elem *e;
   
+  bool ready = true;
   /* Wake up all threads that reached the alarm_due_time */
-  while (ready && list_size (&sleeper_list) != 0) 
+  while (ready && list_size (&thread_due_time_list) > 0) 
     {
-      
-      struct list_elem *e = list_begin (&sleeper_list);
-      struct sema_thread_pair *h = list_entry (e, struct sema_thread_pair, elem);
-      struct semaphore sleep_sema = h->sema;
-      //printf("SLEEPER_LIST: %d", h->t->tid);
-      if (ticks >= h->alarm_due_time)
+      //struct sema_due_time_node *first = get_first_sema_due_time_node();
+      struct thread *first = get_first_thread_due_time_node();
+      if (ticks >= first->alarm_due_time)
         {
-          sema_up (&sleep_sema);
-          e = list_pop_front (&sleeper_list);
-          free(e);
+          unblock_sleeping_thread(first);
           continue;
         }
       ready = false;
     }
- 
   thread_tick ();
 }
 
