@@ -21,6 +21,7 @@
 /* A list for storing the alarm due time and the 
    semaphore for blocking the current thread. */
 static struct list thread_due_time_list;
+struct semaphore blocked_thread_list_sema;
 
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
@@ -99,8 +100,8 @@ compare_ticks_func(const struct list_elem *a, const struct list_elem *b, void *a
 {
 
   if(aux == NULL){
-    struct thread *t1 = list_entry (a, struct thread, elem);
-    struct thread *t2 = list_entry (b, struct thread, elem);
+    struct thread *t1 = list_entry (a, struct thread, blockedelem);
+    struct thread *t2 = list_entry (b, struct thread, blockedelem);
     return t1->alarm_due_time < t2->alarm_due_time;
   }
   return NULL;
@@ -110,9 +111,7 @@ compare_ticks_func(const struct list_elem *a, const struct list_elem *b, void *a
 void
 thread_due_time_init(struct thread *t, int64_t alarm_due_time)
 {
-  // sema_init(&sema, 0);
-  // t->blocker_sema = sema;
-
+  sema_init(&t->blocker_sema, 0);
   t->alarm_due_time = alarm_due_time;
 }
 
@@ -149,7 +148,11 @@ timer_sleep (int64_t ticks)
   
   thread_due_time_init(curr_thread, start + ticks);
 
+  /* Only allow one thread to insert into the list at a time */
+  sema_init(&blocked_thread_list_sema, 1);
+  sema_down(&blocked_thread_list_sema);
   list_insert_ordered (&thread_due_time_list, &curr_thread->blockedelem, compare_ticks, NULL);
+  sema_up(&blocked_thread_list_sema);
   
   /* Put current thread to sleep */
   //curr_thread->status = THREAD_BLOCKED;
@@ -231,7 +234,7 @@ timer_print_stats (void)
 struct thread *
 get_first_thread_due_time_node(void)
 {
-  struct list_elem *e = list_front(&thread_due_time_list);
+  struct list_elem *e = list_begin(&thread_due_time_list);
   struct thread *t = list_entry(e, struct thread, blockedelem);
   return t;
 }
@@ -241,8 +244,8 @@ void
 unblock_sleeping_thread(struct thread *first){
   if(first != NULL && &first->blocker_sema != NULL){
     sema_up(&first->blocker_sema);
+    list_pop_front (&thread_due_time_list);
   }
-  list_pop_front (&thread_due_time_list);
 }
 
 /* Timer interrupt handler. */
