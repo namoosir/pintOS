@@ -296,6 +296,19 @@ thread_exit (void)
   NOT_REACHED ();
 }
 
+list_less_func compare_priority_func;
+bool
+compare_priority_func (const struct list_elem *a, const struct list_elem *b, void *aux) 
+{
+  if(aux != NULL){
+    struct thread *t1 = list_entry (a, struct thread, elem);
+    struct thread *t2 = list_entry (b, struct thread, elem);
+    return t1->priority < t2->priority;
+  }
+  return NULL;
+}
+
+
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
 void
@@ -307,9 +320,14 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
-  cur->status = THREAD_READY;                           //MIGHT NEED TO CHANGE: SEMA UP??
+
+  if (cur != idle_thread && list_size (&ready_list) > 0){
+    // list_pop_front (&ready_list);
+    list_less_func *compare_priority_func = compare_priority_func;
+    list_insert_ordered (&ready_list, &cur->elem, compare_priority_func, NULL);
+  }
+
+  cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
 }
@@ -335,7 +353,12 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  if (thread_current ()->priority < new_priority) {
+    thread_current ()->priority = new_priority;
+    return;
+  }
   thread_current ()->priority = new_priority;
+  thread_yield ();
 }
 
 /* Returns the current thread's priority. */
