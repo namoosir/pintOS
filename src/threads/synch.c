@@ -196,6 +196,22 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  int initial_sema_value = (lock->semaphore).value;
+  if (!lock_try_acquire (lock))
+  {
+    //donate
+    int current_priority = thread_get_priority(); //Greatest of donated and its own priority
+    int lock_holder_priority = (lock->holder)->priority;
+    if (lock_holder_priority < current_priority) {
+      (lock->holder)->received_priority = current_priority;
+      sema_down (&lock->semaphore);
+      lock->holder = thread_current ();
+      thread_yield ();
+    }
+  }
+
+  if ((lock->semaphore).value != initial_sema_value) return;
+
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
 }
@@ -231,6 +247,13 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  if ((lock->holder)->received_priority > (lock->holder)->priority) 
+  {
+    (lock->holder)->received_priority = -1;
+    lock->holder = NULL;
+    sema_up (&lock->semaphore);
+    thread_yield ();
+  }
   lock->holder = NULL;
   sema_up (&lock->semaphore);
 }

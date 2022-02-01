@@ -46,6 +46,8 @@ timer_init (void)
 
   /* timer_init is called once, so we initaizlize the list here */
   list_init (&thread_due_time_list);
+  // initializating semaphore to lock the list
+  sema_init(&blocked_thread_list_sema, 1);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -149,7 +151,7 @@ timer_sleep (int64_t ticks)
   thread_due_time_init(curr_thread, start + ticks);
 
   /* Only allow one thread to insert into the list at a time */
-  sema_init(&blocked_thread_list_sema, 1);
+  // sema_init(&blocked_thread_list_sema, 1);
   sema_down(&blocked_thread_list_sema);
   list_insert_ordered (&thread_due_time_list, &curr_thread->blockedelem, compare_ticks, NULL);
   sema_up(&blocked_thread_list_sema);

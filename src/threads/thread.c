@@ -75,10 +75,14 @@ list_less_func compare_priority_func;
 bool
 compare_priority_func (const struct list_elem *a, const struct list_elem *b, void *aux) 
 {
-  if(aux != NULL){
+  if(aux == NULL){
     struct thread *t1 = list_entry (a, struct thread, elem);
     struct thread *t2 = list_entry (b, struct thread, elem);
-    return t1->priority < t2->priority;
+  
+    // Max of received priority and given priority
+    int t1_priority = t1->priority >= t1->received_priority ? t1->priority : t1->received_priority;
+    int t2_priority = t2->priority >= t2->received_priority ? t2->priority : t2->received_priority;
+    return t1_priority > t2_priority;
   }
   return NULL;
 }
@@ -374,7 +378,7 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  return thread_current ()->priority >= thread_current ()->received_priority ? thread_current ()->priority : thread_current ()->received_priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -495,6 +499,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+  t->received_priority = -1;
 
   t->alarm_due_time = -1;
   struct semaphore *s = &t->blocker_sema;

@@ -91,6 +91,7 @@ struct thread
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
 
+    int received_priority;
     /* Used for timer.c */
     struct semaphore blocker_sema;      /* Semaphore for blocking thread. */
     int64_t alarm_due_time;             /* Time when the thread alarm is due. */
