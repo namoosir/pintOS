@@ -248,11 +248,19 @@ thread_unblock (struct thread *t)
   ASSERT (is_thread (t));
 
   old_level = intr_disable ();
+
   ASSERT (t->status == THREAD_BLOCKED);
   list_less_func *compare_priority = compare_priority_func;
   list_insert_ordered (&ready_list, &t->elem, compare_priority, NULL); 
   t->status = THREAD_READY;
-  if(thread_current () -> priority > t -> priority) thread_yield ();
+
+  struct thread *current_thread = thread_current();
+  int current_thread_priority = current_thread->priority;
+  int t_priority = t->priority;
+  if(current_thread != idle_thread){
+    if(t_priority > current_thread_priority) thread_yield ();
+  }
+    
   intr_set_level (old_level);
 }
 
@@ -354,7 +362,7 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  if (thread_current ()->priority < new_priority) {
+  if (thread_current ()->priority <= new_priority) {
     thread_current ()->priority = new_priority;
     return;
   }
