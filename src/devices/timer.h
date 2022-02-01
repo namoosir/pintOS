@@ -9,13 +9,6 @@
 /* Number of timer interrupts per second. */
 #define TIMER_FREQ 100
 
- struct sema_due_time_node
- {
-  int64_t alarm_due_time;             /* Time when the thread alarm is due. */ 
-  struct semaphore *sema;             /* Semaphore for the thread. */
-  struct list_elem elem;  
- };
-
 struct thread *get_first_thread_due_time_node(void);
 void unblock_sleeping_thread(struct thread *first);
 void thread_due_time_init(struct thread *t, int64_t alarm_due_time);

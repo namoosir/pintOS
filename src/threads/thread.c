@@ -71,6 +71,18 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+list_less_func compare_priority_func;
+bool
+compare_priority_func (const struct list_elem *a, const struct list_elem *b, void *aux) 
+{
+  if(aux != NULL){
+    struct thread *t1 = list_entry (a, struct thread, elem);
+    struct thread *t2 = list_entry (b, struct thread, elem);
+    return t1->priority < t2->priority;
+  }
+  return NULL;
+}
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -237,8 +249,10 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  list_less_func *compare_priority = compare_priority_func;
+  list_insert_ordered (&ready_list, &t->elem, compare_priority, NULL); 
   t->status = THREAD_READY;
+  if(thread_current () -> priority > t -> priority) thread_yield ();
   intr_set_level (old_level);
 }
 
@@ -296,19 +310,6 @@ thread_exit (void)
   NOT_REACHED ();
 }
 
-list_less_func compare_priority_func;
-bool
-compare_priority_func (const struct list_elem *a, const struct list_elem *b, void *aux) 
-{
-  if(aux != NULL){
-    struct thread *t1 = list_entry (a, struct thread, elem);
-    struct thread *t2 = list_entry (b, struct thread, elem);
-    return t1->priority < t2->priority;
-  }
-  return NULL;
-}
-
-
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
 void
@@ -321,10 +322,10 @@ thread_yield (void)
 
   old_level = intr_disable ();
 
-  if (cur != idle_thread && list_size (&ready_list) > 0){
+  if (cur != idle_thread){
     // list_pop_front (&ready_list);
-    list_less_func *compare_priority_func = compare_priority_func;
-    list_insert_ordered (&ready_list, &cur->elem, compare_priority_func, NULL);
+    list_less_func *compare_priority = compare_priority_func;
+    list_insert_ordered (&ready_list, &cur->elem, compare_priority, NULL);
   }
 
   cur->status = THREAD_READY;
