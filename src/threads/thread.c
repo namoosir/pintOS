@@ -259,8 +259,8 @@ thread_unblock (struct thread *t)
   t->status = THREAD_READY;
 
   struct thread *current_thread = thread_current();
-  int current_thread_priority = current_thread->priority;
-  int t_priority = t->priority;
+  int current_thread_priority = thread_get_priority(); //current_thread->priority;
+  int t_priority = t->priority > t->received_priority ? t->priority : t->received_priority;
   if(current_thread != idle_thread){
     if(t_priority > current_thread_priority) thread_yield ();
   }
@@ -501,6 +501,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   t->received_priority = -1;
+  t->donated_from = NULL;
 
   t->alarm_due_time = -1;
   struct semaphore *s = &t->blocker_sema;

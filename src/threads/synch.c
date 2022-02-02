@@ -204,6 +204,8 @@ lock_acquire (struct lock *lock)
     int lock_holder_priority = (lock->holder)->priority;
     if (lock_holder_priority < current_priority) {
       (lock->holder)->received_priority = current_priority;
+      // (lock->holder)->donated_from = thread_current();
+
       sema_down (&lock->semaphore);
       lock->holder = thread_current ();
       thread_yield ();
@@ -252,6 +254,8 @@ lock_release (struct lock *lock)
     (lock->holder)->received_priority = -1;
     lock->holder = NULL;
     sema_up (&lock->semaphore);
+    // thread_unblock((lock->holder)->donated_from);
+    // (lock->holder)->donated_from = NULL;
     thread_yield ();
   }
   lock->holder = NULL;
