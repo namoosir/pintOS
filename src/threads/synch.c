@@ -204,15 +204,16 @@ lock_acquire (struct lock *lock)
     int lock_holder_priority = (lock->holder)->priority;
     if (lock_holder_priority < current_priority) {
       (lock->holder)->received_priority = current_priority;
-      // (lock->holder)->donated_from = thread_current();
+      (lock->holder)->donated_from = thread_current();
 
       sema_down (&lock->semaphore);
       lock->holder = thread_current ();
+      // schedule ();
       thread_yield ();
     }
   }
 
-  if ((lock->semaphore).value != initial_sema_value) return;
+  if ((int)(lock->semaphore).value != initial_sema_value) return;
 
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
@@ -252,11 +253,13 @@ lock_release (struct lock *lock)
   if ((lock->holder)->received_priority > (lock->holder)->priority) 
   {
     (lock->holder)->received_priority = -1;
-    lock->holder = NULL;
     sema_up (&lock->semaphore);
+    // struct thread *temp = (lock->holder)->donated_from;
     // thread_unblock((lock->holder)->donated_from);
     // (lock->holder)->donated_from = NULL;
+    lock->holder = NULL;
     thread_yield ();
+    return;
   }
   lock->holder = NULL;
   sema_up (&lock->semaphore);
