@@ -122,16 +122,16 @@ sema_up (struct semaphore *sema)
     list_remove(max_priority);
 
     thread_to_remove = list_entry (max_priority, struct thread, elem);
+    sema->value++;
     thread_unblock (thread_to_remove);    
     not_empty = true;
-  } 
+  }
 
   // make sure to consider max priority later
-  sema->value++;
+  if (!not_empty) sema->value++;
 
   intr_set_level (old_level);
-  if(thread_to_remove->priority > thread_get_priority() && not_empty) thread_yield ();
-
+  // if(thread_to_remove->priority > thread_get_priority() && not_empty) thread_yield ();
 }
 
 static void sema_test_helper (void *sema_);
@@ -352,6 +352,26 @@ cond_wait (struct condition *cond, struct lock *lock)
   lock_acquire (lock);
 }
 
+list_less_func compare_cond_func;
+bool
+compare_cond_func (const struct list_elem *a, const struct list_elem *b, void *aux) 
+{
+  if(aux == NULL){
+    struct semaphore_elem *s1 = list_entry (a, struct semaphore_elem, elem);
+    struct semaphore_elem *s2 = list_entry (b, struct semaphore_elem, elem);
+    
+    struct list *s1_waiters = &(s1->semaphore.waiters);
+    struct list *s2_waiters = &(s2->semaphore.waiters);
+
+    struct list_elem *t1 = list_max (s1_waiters, compare_priority_func, NULL);
+    struct list_elem *t2 = list_max (s2_waiters, compare_priority_func, NULL);
+  
+    // Max of received priority and given priority
+    return compare_priority_func(t1, t2, NULL);
+  }
+  return NULL;
+}
+
 /* If any threads are waiting on COND (protected by LOCK), then
    this function signals one of them to wake up from its wait.
    LOCK must be held before calling this function.
@@ -367,9 +387,12 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters)) 
-    sema_up (&list_entry (list_pop_front (&cond->waiters),
-                          struct semaphore_elem, elem)->semaphore);
+  if (!list_empty (&cond->waiters)) {
+    list_less_func *compare_cond = compare_cond_func;
+    struct list_elem *max_cond = list_min (&cond->waiters, compare_cond, NULL);
+    list_remove(max_cond);
+    
+    sema_up (&list_entry (max_cond, struct semaphore_elem, elem)->semaphore);
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
