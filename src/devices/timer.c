@@ -21,7 +21,7 @@
 /* A list for storing the alarm due time and the 
    semaphore for blocking the current thread. */
 static struct list thread_due_time_list;
-struct semaphore blocked_thread_list_sema;
+static struct semaphore blocked_thread_list_sema;
 
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
@@ -255,6 +255,9 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+  if (timer_ticks() % TIMER_FREQ == 0) {
+    thread_get_load_avg();
+  }  
   
   bool ready = true;
   /* Wake up all threads that reached the alarm_due_time */

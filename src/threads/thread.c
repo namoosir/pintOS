@@ -11,6 +11,8 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "devices/timer.h"
+
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -395,6 +397,11 @@ void
 thread_set_nice (int nice UNUSED) 
 {
   /* Not yet implemented. */
+  thread_current()->nice_value = nice;
+
+  //Recalculate priority
+
+  //if priority is higher than current thread's priority, yield
 }
 
 /* Returns the current thread's nice value. */
@@ -402,22 +409,29 @@ int
 thread_get_nice (void) 
 {
   /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice_value;
 }
 
+static struct lock lock;
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  static int load_avg = 0;
+  if (timer_ticks() % TIMER_FREQ == 0) {
+    int ready_threads = list_size(&ready_list);
+    
+
+    load_avg = (59/60)*load_avg + (1/60)*ready_threads;
+  }
+  return load_avg;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
+  
   return 0;
 }
 
