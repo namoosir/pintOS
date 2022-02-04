@@ -165,6 +165,21 @@ thread_tick (void)
   else
     kernel_ticks++;
 
+  if(thread_mlfqs)
+  {
+    if (timer_ticks() == 1) 
+    {
+      thread_get_load_avg();
+    }
+  
+    if (timer_ticks() % TIMER_FREQ == 0) 
+    {
+      thread_get_load_avg();
+    }  
+    increase_recent_cpu_value();
+  }
+
+
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
@@ -273,12 +288,16 @@ thread_unblock (struct thread *t)
   list_insert_ordered (&ready_list, &t->elem, compare_priority, NULL); 
   t->status = THREAD_READY;
 
-  struct thread *current_thread = thread_current();
-  int current_thread_priority = thread_get_priority(); //current_thread->priority;
-  int t_priority = t->priority > t->received_priority ? t->priority : t->received_priority;
-  if(current_thread != idle_thread){
-    if(t_priority > current_thread_priority) thread_yield ();
+  if(!thread_mlfqs)
+  {
+    struct thread *current_thread = thread_current();
+    int current_thread_priority = thread_get_priority(); //current_thread->priority;
+    int t_priority = t->priority > t->received_priority ? t->priority : t->received_priority;
+    if(current_thread != idle_thread){
+      if(t_priority > current_thread_priority) thread_yield ();
+    }
   }
+
     
   intr_set_level (old_level);
 }

@@ -259,33 +259,24 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  if(thread_mlfqs)
-  {
-    if (timer_ticks() == 1) 
-    {
-      thread_get_load_avg();
-    }
-  
-    if (timer_ticks() % TIMER_FREQ == 0) 
-    {
-      thread_get_load_avg();
-    }  
-    increase_recent_cpu_value();
-  }else{
-    bool ready = true;
-    /* Wake up all threads that reached the alarm_due_time */
-    while (ready && list_size (&thread_due_time_list) > 0) 
-      {
-      //struct sema_due_time_node *first = get_first_sema_due_time_node();
-      struct thread *first = get_first_thread_due_time_node();
-      if (ticks >= first->alarm_due_time)
+ 
+    // if(!thread_mlfqs){
+      bool ready = true;
+      /* Wake up all threads that reached the alarm_due_time */
+      while (ready && list_size (&thread_due_time_list) > 0) 
         {
-          unblock_sleeping_thread(first);
-          continue;
-        }
-      ready = false;
-    }
-  }
+        //struct sema_due_time_node *first = get_first_sema_due_time_node();
+        struct thread *first = get_first_thread_due_time_node();
+        if (ticks >= first->alarm_due_time)
+          {
+            unblock_sleeping_thread(first);
+            continue;
+          }
+        ready = false;
+      }
+    // }
+
+  
 
   thread_tick ();
 }
