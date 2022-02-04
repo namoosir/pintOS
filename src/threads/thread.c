@@ -366,19 +366,28 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  if (thread_current ()->priority <= new_priority) {
-    thread_current ()->priority = new_priority;
+  if(thread_mlfqs){
     return;
+  }else{
+    if (thread_current ()->priority <= new_priority) {
+      thread_current ()->priority = new_priority;
+      return;
+    }
+    thread_current ()->priority = new_priority;
+    thread_yield ();
   }
-  thread_current ()->priority = new_priority;
-  thread_yield ();
+
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority >= thread_current ()->received_priority ? thread_current ()->priority : thread_current ()->received_priority;
+  if(thread_mlfqs){
+    return;
+  }else{
+    return thread_current ()->priority >= thread_current ()->received_priority ? thread_current ()->priority : thread_current ()->received_priority;
+  }
 }
 
 /* Sets the current thread's nice value to NICE. */
