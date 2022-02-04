@@ -99,8 +99,6 @@ struct thread
     /* Used for mlfqs */
     int recent_cpu_value;
     int nice_value;
-    int load_avg_value;
-    
 
     /* Used for timer.c */
     struct semaphore blocker_sema;      /* Semaphore for blocking thread. */
@@ -157,5 +155,9 @@ int thread_get_load_avg (void);
 
 list_less_func compare_priority_func;
 bool compare_priority_func (const struct list_elem *a, const struct list_elem *b, void *aux);
+void calculate_priority_func(struct thread *t);
+void calculate_recent_cpu_func(struct thread *t, void *aux);
+
+
 
 #endif /* threads/thread.h */

@@ -250,14 +250,29 @@ unblock_sleeping_thread(struct thread *first){
   }
 }
 
+void increase_recent_cpu_value(void) {
+  thread_current()->recent_cpu_value++;
+}
+
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  if (timer_ticks() % TIMER_FREQ == 0) {
-    thread_get_load_avg();
-  }  
+  if(thread_mlfqs)
+  {
+    if (timer_ticks() == 1) 
+    {
+      thread_get_load_avg();
+    }
+  
+    if (timer_ticks() % TIMER_FREQ == 0) 
+    {
+      thread_get_load_avg();
+    }  
+    increase_recent_cpu_value();
+  }
+
   
   bool ready = true;
   /* Wake up all threads that reached the alarm_due_time */

@@ -12,7 +12,7 @@
 struct thread *get_first_thread_due_time_node(void);
 void unblock_sleeping_thread(struct thread *first);
 void thread_due_time_init(struct thread *t, int64_t alarm_due_time);
-
+void increase_recent_cpu_value(void);
 
 void timer_init (void);
 void timer_calibrate (void);

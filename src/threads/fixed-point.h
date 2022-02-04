@@ -5,12 +5,21 @@
 
 #define F 16384 
 
-#define to_fixed_point(n) (return n * F)
-#define to_integer_round_zero(x) (return x * F)
-#define to_integer_round_nearest(x) (return (x >= 0 ? (x + F / 2) : (x - F / 2)))
+#define to_fixed_point(n) (n * F)
+#define to_integer_round_zero(x) (x * F)
+#define to_integer_round_nearest(x) ((x >= 0 ? (x + F / 2) : (x - F / 2)))
+
+extern inline int32_t add_fp_r(int32_t x, int n);
+extern inline int32_t add_fp_fp(int32_t x, int32_t y);
+extern inline int32_t subtract_fp_r(int32_t x, int n);
+extern inline int32_t subtract_fp_fp(int32_t x, int32_t y);
+extern inline int32_t multiply_fp_r(int32_t x, int n);
+extern inline int32_t multiply_fp_fp(int32_t x, int32_t y);
+extern inline int32_t divide_fp_r(int32_t x, int n);
+extern inline int32_t divide_fp_fp(int32_t x, int32_t y);
 
 extern inline int32_t
-add_fp_r(int n, int32_t x)
+add_fp_r(int32_t x, int n)
 {
     return x + n*F;
 }
@@ -22,7 +31,7 @@ add_fp_fp(int32_t x, int32_t y)
 }
 
 extern inline int32_t
-subtract_fp_r(int n, int32_t x)
+subtract_fp_r(int32_t x, int n)
 {
     return x - n*F;
 }
@@ -34,9 +43,9 @@ subtract_fp_fp(int32_t x, int32_t y)
 }
 
 extern inline int32_t
-multiply_fp_r(int n, int32_t x)
+multiply_fp_r(int32_t x, int n)
 {
-    return x*n;
+    return x * n;
 }
 
 extern inline int32_t
@@ -46,7 +55,7 @@ multiply_fp_fp(int32_t x, int32_t y)
 }
 
 extern inline int32_t
-divide_fp_r(int n, int32_t x)
+divide_fp_r(int32_t x, int n)
 {
     return x/n;
 }
