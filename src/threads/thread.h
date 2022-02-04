@@ -95,6 +95,11 @@ struct thread
     /* Used for priority donation */
     int received_priority;
     struct thread* donated_from;
+
+    /* Used for mlfqs */
+    int recent_cpu_value;
+    int nice_value;
+    int load_avg_value;
     
 
     /* Used for timer.c */
