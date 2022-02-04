@@ -465,26 +465,30 @@ int
 thread_get_load_avg (void) 
 {
   static int load_avg;
-  if (timer_ticks() / TIMER_FREQ <= 1) {
+  static int ticks;
+
+  if (timer_ticks() / TIMER_FREQ < 1) {
+    ticks = 1;
     load_avg = 0;
     return load_avg;
   }
 
-  if (timer_ticks() % TIMER_FREQ == 0) {
-    //sema_down(&load_avg_sema);
+  if (timer_ticks() % TIMER_FREQ == 0 && timer_ticks () != ticks) {
+    ticks = timer_ticks ();
     int ready_threads = list_size(&ready_list);
-    int32_t fifty_nine_fp = to_fixed_point(59);
-    int32_t sixty_fp = to_fixed_point(60);
-    int32_t one_fp = to_fixed_point(1);
-    int32_t first_divide = divide_fp_fp(fifty_nine_fp, sixty_fp);
-    int32_t second_divide = divide_fp_fp(one_fp, sixty_fp);
-    int32_t load_avg_first_term = multiply_fp_r(first_divide, load_avg);
-    int32_t load_avg_second_term = multiply_fp_r(second_divide, ready_threads);
+    if(thread_current() != idle_thread) ready_threads++;
+      
+    // int32_t fifty_nine_fp = to_fixed_point(59);
+    // int32_t sixty_fp = to_fixed_point(60);
+    // int32_t one_fp = to_fixed_point(1);
+    // int32_t first_divide = divide_fp_r(to_fixed_point(59), 60);
+    // int32_t second_divide = divide_fp_r(to_fixed_point(1), 60);
+    // int32_t load_avg_first_term = multiply_fp_fp(divide_fp_r(to_fixed_point(59), 60), load_avg);
+    // int32_t load_avg_second_term = multiply_fp_r(divide_fp_r(to_fixed_point(1), 60), ready_threads);
 
-    load_avg = add_fp_fp(load_avg_first_term, load_avg_second_term);
-    //sema_up(&load_avg_sema);
+    load_avg = multiply_fp_fp(to_fixed_point(59)/60, load_avg) + multiply_fp_r(to_fixed_point(1)/60, ready_threads);
   }
-  return multiply_fp_r((int32_t)load_avg, 100);
+  return to_integer_round_nearest( load_avg * 100 );
 }
 
 void

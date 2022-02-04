@@ -271,13 +271,11 @@ timer_interrupt (struct intr_frame *args UNUSED)
       thread_get_load_avg();
     }  
     increase_recent_cpu_value();
-  }
-
-  
-  bool ready = true;
-  /* Wake up all threads that reached the alarm_due_time */
-  while (ready && list_size (&thread_due_time_list) > 0) 
-    {
+  }else{
+    bool ready = true;
+    /* Wake up all threads that reached the alarm_due_time */
+    while (ready && list_size (&thread_due_time_list) > 0) 
+      {
       //struct sema_due_time_node *first = get_first_sema_due_time_node();
       struct thread *first = get_first_thread_due_time_node();
       if (ticks >= first->alarm_due_time)
@@ -287,6 +285,8 @@ timer_interrupt (struct intr_frame *args UNUSED)
         }
       ready = false;
     }
+  }
+
   thread_tick ();
 }
 
