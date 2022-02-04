@@ -261,9 +261,9 @@ thread_unblock (struct thread *t)
   struct thread *current_thread = thread_current();
   int current_thread_priority = thread_get_priority(); //current_thread->priority;
   int t_priority = t->priority > t->received_priority ? t->priority : t->received_priority;
-  if(current_thread != idle_thread){
-    if(t_priority > current_thread_priority) thread_yield ();
-  }
+  // if(current_thread != idle_thread){
+  //   if(t_priority > current_thread_priority) thread_yield ();
+  // }
     
   intr_set_level (old_level);
 }
