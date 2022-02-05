@@ -250,10 +250,6 @@ unblock_sleeping_thread(struct thread *first){
   }
 }
 
-void increase_recent_cpu_value(void) {
-  thread_current()->recent_cpu_value++;
-}
-
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED)

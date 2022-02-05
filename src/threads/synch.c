@@ -212,27 +212,27 @@ lock_acquire (struct lock *lock)
 
   int initial_sema_value = (lock->semaphore).value;
 
-  // if (!lock_try_acquire (lock))
-  // {
-  //   //donate
-  //   int current_priority = thread_get_priority(); //Greatest of donated and its own priority
-  //   int lock_holder_priority = (lock->holder)->priority;
-  //   if (lock_holder_priority < current_priority) {
-  //     (lock->holder)->received_priority = current_priority;
-  //     (lock->holder)->donated_from = thread_current();
+  if (!lock_try_acquire (lock))
+  {
+    //donate
+    int current_priority = thread_get_priority(); //Greatest of donated and its own priority
+    int lock_holder_priority = (lock->holder)->priority;
+    if (lock_holder_priority < current_priority) {
+      (lock->holder)->received_priority = current_priority;
+      (lock->holder)->donated_from = thread_current();
 
-  //     // sema_down (&lock->semaphore);
+      // sema_down (&lock->semaphore);
       
-  //     // sema_up (&lock->semaphore);
+      // sema_up (&lock->semaphore);
 
-  //     // thread_yield ();
+      // thread_yield ();
 
-  //     sema_down (&lock->semaphore);
-  //     lock->holder = thread_current ();
-  //   }
-  // }
+      sema_down (&lock->semaphore);
+      lock->holder = thread_current ();
+    }
+  }
 
-  // if ((int)(lock->semaphore).value != initial_sema_value) return;
+  if ((int)(lock->semaphore).value != initial_sema_value) return;
 
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
@@ -269,19 +269,20 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
-  // if ((lock->holder)->received_priority > (lock->holder)->priority) 
-  // {
-  //   (lock->holder)->received_priority = -1;
+  if ((lock->holder)->received_priority > (lock->holder)->priority) 
+  {
+    (lock->holder)->received_priority = -1;
+    
+    lock->holder = NULL;
+    sema_up (&lock->semaphore);
 
-  //   sema_up (&lock->semaphore);
-
-  //   // struct thread *temp = (lock->holder)->donated_from;
-  //   // thread_unblock((lock->holder)->donated_from);
-  //   // (lock->holder)->donated_from = NULL;
-  //   lock->holder = NULL;
-  //   thread_yield ();
-  //   return;
-  // }
+    // struct thread *temp = (lock->holder)->donated_from;
+    // thread_unblock((lock->holder)->donated_from);
+    // (lock->holder)->donated_from = NULL;
+    
+    thread_yield ();
+    return;
+  }
   lock->holder = NULL;
   sema_up (&lock->semaphore);
 }

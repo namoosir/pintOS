@@ -121,6 +121,9 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
+void calculate_load_avg(void);
+void change_all_priority(void);
+void change_all_recent_cpu (void);
 
 void thread_init (void);
 void thread_start (void);
@@ -158,6 +161,11 @@ bool compare_priority_func (const struct list_elem *a, const struct list_elem *b
 void calculate_priority_func(struct thread *t);
 void calculate_recent_cpu_func(struct thread *t, void *aux);
 
-
+/* List of locks that hold a thread with donated priority */
+struct donated_locks
+  {
+    struct lock;
+    struct list_elem lockelem;  
+  };
 
 #endif /* threads/thread.h */
