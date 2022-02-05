@@ -240,7 +240,6 @@ lock_acquire (struct lock *lock)
         for (e = list_begin (&((lock->holder)->donated_locks)); e != list_end (&((lock->holder)->donated_locks));
             e = list_next (e))
         {
-          struct lock *l = list_entry (e, struct lock, lockelem);
           if(&lock->lockelem == e)
           {
             found = true;
