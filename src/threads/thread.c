@@ -182,9 +182,7 @@ thread_tick (void)
     {
       change_all_priority();
     }
-    increase_recent_cpu_value();
-    
-    
+    increase_recent_cpu_value();    
   }
 
 
@@ -309,7 +307,6 @@ thread_unblock (struct thread *t)
     }
   }
 
-    
   intr_set_level (old_level);
 }
 

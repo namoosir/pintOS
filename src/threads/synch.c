@@ -316,7 +316,16 @@ lock_release (struct lock *lock)
 
     if ((lock->holder)->received_priority > (lock->holder)->priority && found) 
     {
-      (lock->holder)->received_priority = -1;
+      // if (list_size(&((lock->semaphore).waiters)) > 0) {
+      //   list_less_func *compare_priority = compare_priority_func;
+
+      //   e = list_min(&((lock->semaphore).waiters), compare_priority, NULL);
+      //   t = list_entry (e, struct thread, elem);
+      //   int max_p = t->priority > t->received_priority ? t->priority : t->received_priority;
+      //   (lock->holder)->received_priority = max_p;
+      // } else {
+        (lock->holder)->received_priority = -1;
+      // }
       
       lock->holder = NULL;
       sema_up (&lock->semaphore);
