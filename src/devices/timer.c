@@ -122,8 +122,6 @@ thread_due_time_init(struct thread *t, int64_t alarm_due_time)
 void
 timer_sleep (int64_t ticks) 
 {
-  //printf("ticks before if: %lld\n", ticks);
-
   ASSERT (intr_get_level () == INTR_ON);
 
   if (ticks <= 0)
@@ -132,32 +130,17 @@ timer_sleep (int64_t ticks)
     }
 
   int64_t start = timer_ticks ();
-
-  //printf("ticks after if: %lld, start: %lld\n", ticks, start);
-
   list_less_func* compare_ticks = compare_ticks_func;
 
   struct thread *curr_thread = thread_current();
-  //curr_thread->alarm_due_time = start + ticks;
-
-  // struct semaphore blocker_sema;
-  // sema_init(&blocker_sema, 0);
-  // curr_thread->blocker_sema = blocker_sema;
-
-
-  //struct sema_due_time_node *node = malloc(sizeof(struct sema_due_time_node));
-  //struct semaphore *sleep_sema = malloc(sizeof(struct semaphore));
-  
   thread_due_time_init(curr_thread, start + ticks);
 
   /* Only allow one thread to insert into the list at a time */
-  // sema_init(&blocked_thread_list_sema, 1);
   sema_down(&blocked_thread_list_sema);
   list_insert_ordered (&thread_due_time_list, &curr_thread->blockedelem, compare_ticks, NULL);
   sema_up(&blocked_thread_list_sema);
   
   /* Put current thread to sleep */
-  //curr_thread->status = THREAD_BLOCKED;
   sema_down(&curr_thread->blocker_sema);
 }
 

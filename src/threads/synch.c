@@ -211,50 +211,53 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  int initial_sema_value = (lock->semaphore).value;
-  bool downed = false;
+  if(!thread_mlfqs)
+  {    
+    int initial_sema_value = (lock->semaphore).value;
+    bool downed = false;
 
-  if(thread_current()->donated_lock_list_initialized == false){
-        list_init(&thread_current()->donated_locks);
-        thread_current()->donated_lock_list_initialized = true;
-  }
-  if(lock->holder != NULL && (lock->holder)->donated_lock_list_initialized == false) {
-    list_init(&((lock->holder)->donated_locks));
-    (lock->holder)->donated_lock_list_initialized = true;
-  }
-  
-  if (!lock_try_acquire (lock))
-  {
-    //donate
-    int current_priority = thread_get_priority(); //Greatest of donated and its own priority
-    int lock_holder_priority = (lock->holder)->priority; //TAKE MAX
-    if (lock_holder_priority < current_priority) {
-      (lock->holder)->received_priority = current_priority;
-      (lock->holder)->donated_from = thread_current();
-
-      bool found = false;
-      struct list_elem *e;
-      // Find the lock in the list of donated locks
-      for (e = list_begin (&((lock->holder)->donated_locks)); e != list_end (&((lock->holder)->donated_locks));
-          e = list_next (e))
-      {
-        struct lock *l = list_entry (e, struct lock, lockelem);
-        if(&lock->lockelem == e)
-        {
-          found = true;
-          break;
-        }
-      }
-      
-      if (!found) list_push_front(&(lock->holder)->donated_locks, &lock->lockelem);
-
-      sema_down (&lock->semaphore);
-      downed = true;
-      lock->holder = thread_current ();
+    if(thread_current()->donated_lock_list_initialized == false){
+          list_init(&thread_current()->donated_locks);
+          thread_current()->donated_lock_list_initialized = true;
     }
-  }
+    if(lock->holder != NULL && (lock->holder)->donated_lock_list_initialized == false) {
+      list_init(&((lock->holder)->donated_locks));
+      (lock->holder)->donated_lock_list_initialized = true;
+    }
+    
+    if (!lock_try_acquire (lock))
+    {
+      //donate
+      int current_priority = thread_get_priority(); //Greatest of donated and its own priority
+      int lock_holder_priority = (lock->holder)->priority; //TAKE MAX
+      if (lock_holder_priority < current_priority) {
+        (lock->holder)->received_priority = current_priority;
+        (lock->holder)->donated_from = thread_current();
 
-  if ((int)(lock->semaphore).value != initial_sema_value || downed) return;
+        bool found = false;
+        struct list_elem *e;
+        // Find the lock in the list of donated locks
+        for (e = list_begin (&((lock->holder)->donated_locks)); e != list_end (&((lock->holder)->donated_locks));
+            e = list_next (e))
+        {
+          struct lock *l = list_entry (e, struct lock, lockelem);
+          if(&lock->lockelem == e)
+          {
+            found = true;
+            break;
+          }
+        }
+        
+        if (!found) list_push_front(&(lock->holder)->donated_locks, &lock->lockelem);
+
+        sema_down (&lock->semaphore);
+        downed = true;
+        lock->holder = thread_current ();
+      }
+    }
+
+    if ((int)(lock->semaphore).value != initial_sema_value || downed) return;
+  }
 
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
@@ -291,37 +294,34 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
   
-  bool found = false;
-  struct list_elem *e;
-  // list_push_front(&thread_current()->donated_locks, &lock->lockelem);
-  struct thread *t = thread_current ();
-  
-  // Find the lock in the list of donated locks
-  for (e = list_begin (&t->donated_locks); e != list_end (&t->donated_locks);
-        e = list_next (e))
-    {
-      struct lock *l = list_entry (e, struct lock, lockelem);
-      if(t == lock->holder && &l->semaphore == &lock->semaphore)
-      {
-        found = true;
-        list_remove(e);
-        break;
-      }
-    }
-
-  if ((lock->holder)->received_priority > (lock->holder)->priority && found) 
+  if(!thread_mlfqs)
   {
-    (lock->holder)->received_priority = -1;
+    bool found = false;
+    struct list_elem *e;
+    // list_push_front(&thread_current()->donated_locks, &lock->lockelem);
+    struct thread *t = thread_current ();
     
-    lock->holder = NULL;
-    sema_up (&lock->semaphore);
+    // Find the lock in the list of donated locks
+    for (e = list_begin (&t->donated_locks); e != list_end (&t->donated_locks);
+          e = list_next (e))
+      {
+        struct lock *l = list_entry (e, struct lock, lockelem);
+        if(t == lock->holder && &l->semaphore == &lock->semaphore)
+        {
+          found = true;
+          list_remove(e);
+          break;
+        }
+      }
 
-    // struct thread *temp = (lock->holder)->donated_from;
-    // thread_unblock((lock->holder)->donated_from);
-    // (lock->holder)->donated_from = NULL;
-    
-    // thread_yield ();
-    return;
+    if ((lock->holder)->received_priority > (lock->holder)->priority && found) 
+    {
+      (lock->holder)->received_priority = -1;
+      
+      lock->holder = NULL;
+      sema_up (&lock->semaphore);
+      return;
+    }
   }
   lock->holder = NULL;
   sema_up (&lock->semaphore);
