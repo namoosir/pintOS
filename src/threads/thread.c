@@ -455,8 +455,8 @@ change_all_priority(void){
     void *calculate_priority = calculate_priority_func;
     thread_foreach(calculate_priority, NULL);
     
-    list_less_func *compare_priority = compare_priority_func;
-    list_sort(&ready_list, compare_priority, NULL);
+    // list_less_func *compare_priority = compare_priority_func;
+    // list_sort(&ready_list, compare_priority, NULL);
     intr_set_level (oldlevel);
 
     // if(list_size(&ready_list) > 0)
@@ -476,8 +476,8 @@ thread_set_nice (int nice UNUSED)
   else if (nice < -20) thread_current ()->nice_value = -20;
   else thread_current()->nice_value = nice;
 
-  // calculate_recent_cpu_func(thread_current(), NULL);
-  // calculate_priority_func(thread_current());
+  calculate_recent_cpu_func(thread_current(), NULL);
+  calculate_priority_func(thread_current());
 
 }
 
