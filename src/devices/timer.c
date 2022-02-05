@@ -238,25 +238,20 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
- 
-    // if(!thread_mlfqs){
-      bool ready = true;
-      /* Wake up all threads that reached the alarm_due_time */
-      while (ready && list_size (&thread_due_time_list) > 0) 
-        {
-        //struct sema_due_time_node *first = get_first_sema_due_time_node();
-        struct thread *first = get_first_thread_due_time_node();
-        if (ticks >= first->alarm_due_time)
-          {
-            unblock_sleeping_thread(first);
-            continue;
-          }
-        ready = false;
-      }
-    // }
 
-  
-
+  bool ready = true;
+  /* Wake up all threads that reached the alarm_due_time */
+  while (ready && list_size (&thread_due_time_list) > 0) 
+  {
+    //struct sema_due_time_node *first = get_first_sema_due_time_node();
+    struct thread *first = get_first_thread_due_time_node();
+    if (ticks >= first->alarm_due_time)
+    {
+      unblock_sleeping_thread(first);
+      continue;
+    }
+    ready = false;
+  }
   thread_tick ();
 }
 

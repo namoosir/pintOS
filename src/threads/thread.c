@@ -122,9 +122,9 @@ thread_init (void)
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
 
-  initial_thread->recent_cpu_value = 0;
-  initial_thread->nice_value = 0;
-  calculate_priority_func(initial_thread);
+  // initial_thread->recent_cpu_value = 0;
+  // initial_thread->nice_value = 0;
+  // calculate_priority_func(initial_thread);
 
   load_avg = 0;
   
@@ -170,6 +170,7 @@ thread_tick (void)
 
   if(thread_mlfqs)
   {
+    // increase_recent_cpu_value();
     //if (timer_ticks() == 1) calculate_load_avg();
     if (timer_ticks() % TIMER_FREQ == 0) 
     {
@@ -181,7 +182,7 @@ thread_tick (void)
     {
       change_all_priority();
     }
-    // increase_recent_cpu_value();
+    increase_recent_cpu_value();
   }
 
 
@@ -189,6 +190,8 @@ thread_tick (void)
   if (++thread_ticks >= TIME_SLICE){
     intr_yield_on_return ();
   }
+  // list_less_func *compare_priority = compare_priority_func;
+  // list_sort(&ready_list, compare_priority, NULL);
 }
 
 /* Prints thread statistics. */
@@ -433,15 +436,13 @@ thread_get_priority (void)
 void 
 calculate_priority_func(struct thread *t){
   //priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
-  int nice = t->nice_value;
-  int recent_cpu = t->recent_cpu_value;
 
-  int32_t quarter_recent_cpu = recent_cpu/4;
-  int32_t two_nice = nice * 2;
+  int32_t quarter_recent_cpu = (t->recent_cpu_value)/4;
+  int32_t two_nice = t->nice_value * 2;
   int32_t priority = add_fp_r(-1*quarter_recent_cpu, (PRI_MAX - two_nice));
   priority = to_integer_round_zero (priority);
 
-  if (priority < 0) t->priority = 0;
+  if (priority < PRI_MIN) t->priority = PRI_MIN;
   else if (priority > PRI_MAX) t->priority = PRI_MAX;
   else t->priority = priority;
   
@@ -473,7 +474,11 @@ thread_set_nice (int nice UNUSED)
 {
   if (nice > 20) thread_current ()->nice_value = 20;
   else if (nice < -20) thread_current ()->nice_value = -20;
-  else thread_current()->nice_value = nice;  
+  else thread_current()->nice_value = nice;
+
+  // calculate_recent_cpu_func(thread_current(), NULL);
+  // calculate_priority_func(thread_current());
+
 }
 
 /* Returns the current thread's nice value. */
@@ -488,7 +493,7 @@ calculate_load_avg(void)
 {
   int ready_threads = list_size(&ready_list);
   if(thread_current() != idle_thread) ready_threads++;
-  load_avg = multiply_fp_fp(to_fixed_point(59)/60, load_avg) + multiply_fp_r(to_fixed_point(1)/60, ready_threads);
+  load_avg = multiply_fp_fp(to_fixed_point(59)/60, load_avg) + (to_fixed_point(1)/60) * ready_threads;
 }
 
 /* Returns 100 times the system load average. */
@@ -509,7 +514,7 @@ calculate_recent_cpu_func(struct thread *t, void *aux)
   if (aux == NULL) 
   {
     int32_t coefficient = divide_fp_fp(load_avg*2, add_fp_r(load_avg*2, 1));
-    thread_current ()->recent_cpu_value = add_fp_r(multiply_fp_fp(coefficient, t->recent_cpu_value), t->nice_value); 
+    t->recent_cpu_value = add_fp_r(multiply_fp_fp(coefficient, t->recent_cpu_value), t->nice_value); 
   }
 }
 
@@ -626,8 +631,16 @@ init_thread (struct thread *t, const char *name, int priority)
   t->donated_lock_list_initialized = false;
 
   if (thread_mlfqs) {
-    t->recent_cpu_value = running_thread ()->recent_cpu_value;
-    t->nice_value = running_thread ()->nice_value;
+    if(t == initial_thread){
+      t->recent_cpu_value = 0;
+      t->nice_value = 0;
+      calculate_priority_func(initial_thread);
+      // t->nice_value=63;
+    }
+    else{
+      t->recent_cpu_value = thread_current ()->recent_cpu_value;
+      t->nice_value = thread_current ()->nice_value;
+    }
   }
   
   struct semaphore *s = &t->blocker_sema;
