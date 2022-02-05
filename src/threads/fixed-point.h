@@ -51,7 +51,7 @@ multiply_fp_r(int32_t x, int n)
 extern inline int32_t
 multiply_fp_fp(int32_t x, int32_t y)
 {
-    return (int32_t) (((int64_t) x)*y/F);
+    return (int32_t) (((int64_t) x)*y >> 14);
 }
 
 extern inline int32_t
@@ -63,7 +63,7 @@ divide_fp_r(int32_t x, int n)
 extern inline int32_t
 divide_fp_fp(int32_t x, int32_t y)
 {
-    return ((int32_t) (((int64_t)x * F) / y));
+    return ((int32_t) (((int64_t)x << 14) / y));
 }
 
 #endif
