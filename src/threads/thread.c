@@ -301,17 +301,19 @@ thread_unblock (struct thread *t)
   t->status = THREAD_READY;
 
   /*
-    If we are not using advanced scheduler then yeild when
+    If we are not in an interupt context then yeild when
     unblocking a thread with higher priority
-  */ 
-  if(!thread_mlfqs)
+  */
+  if(!intr_context())
   {
     struct thread *current_thread = thread_current();
     int current_thread_priority = thread_get_priority(); //current_thread->priority;
     int t_priority = t->priority > t->received_priority ? t->priority : t->received_priority;
     if(current_thread != idle_thread){
-      if(t_priority > current_thread_priority) thread_yield ();
-    }
+      if(t_priority > current_thread_priority){
+         thread_yield ();
+      }
+    } 
   }
 
     

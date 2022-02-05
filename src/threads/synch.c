@@ -124,6 +124,7 @@ sema_up (struct semaphore *sema)
 
     thread_to_remove = list_entry (max_priority, struct thread, elem);
     sema->value++;
+    
     thread_unblock (thread_to_remove);    
     not_empty = true;
   }
