@@ -183,6 +183,8 @@ thread_tick (void)
       change_all_priority();
     }
     increase_recent_cpu_value();
+    
+    
   }
 
 
@@ -476,7 +478,7 @@ thread_set_nice (int nice UNUSED)
   else if (nice < -20) thread_current ()->nice_value = -20;
   else thread_current()->nice_value = nice;
 
-  calculate_recent_cpu_func(thread_current(), NULL);
+  //calculate_recent_cpu_func(thread_current(), NULL);
   calculate_priority_func(thread_current());
 
 }
@@ -505,7 +507,13 @@ thread_get_load_avg (void)
 
 void 
 increase_recent_cpu_value(void) {
-  if (thread_current () != idle_thread) thread_current()->recent_cpu_value += to_fixed_point(1);
+  if (thread_current () != idle_thread){
+    int recent = thread_current()->recent_cpu_value;
+    recent += to_fixed_point(1);
+    //Round down to lower recent cpu slightly
+    recent = to_integer_round_zero(recent);
+    thread_current()->recent_cpu_value = to_fixed_point(recent);
+  }
 }
 
 void
