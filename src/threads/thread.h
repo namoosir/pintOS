@@ -105,6 +105,9 @@ struct thread
     int64_t alarm_due_time;             /* Time when the thread alarm is due. */
     struct list_elem blockedelem;       /* List element for all blocked threads */
 
+    struct list donated_locks;
+    bool donated_lock_list_initialized;
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -160,12 +163,5 @@ list_less_func compare_priority_func;
 bool compare_priority_func (const struct list_elem *a, const struct list_elem *b, void *aux);
 void calculate_priority_func(struct thread *t);
 void calculate_recent_cpu_func(struct thread *t, void *aux);
-
-/* List of locks that hold a thread with donated priority */
-struct donated_locks
-  {
-    struct lock;
-    struct list_elem lockelem;  
-  };
 
 #endif /* threads/thread.h */

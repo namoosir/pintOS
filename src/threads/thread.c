@@ -31,9 +31,6 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
-/* List of all locks where donation happened */
-static struct list donated_lock_list;
-
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -122,7 +119,6 @@ thread_init (void)
   list_init (&ready_list);
   list_init (&all_list);
   sema_init(&load_avg_sema, 1);
-  list_init(&donated_lock_list); 
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -257,7 +253,7 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
-
+  
   return tid;
 }
 
@@ -639,12 +635,13 @@ init_thread (struct thread *t, const char *name, int priority)
   t->donated_from = NULL;
 
   t->alarm_due_time = -1;
+  t->donated_lock_list_initialized = false;
 
   if (t->recent_cpu_value != 0 && thread_mlfqs) {
     t->recent_cpu_value = thread_current ()->recent_cpu_value;
     t->nice_value = thread_current ()->nice_value;
   }
-
+  
   struct semaphore *s = &t->blocker_sema;
   s = NULL;
   
