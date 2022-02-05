@@ -124,6 +124,7 @@ sema_up (struct semaphore *sema)
 
     thread_to_remove = list_entry (max_priority, struct thread, elem);
     sema->value++;
+    
     thread_unblock (thread_to_remove);    
     not_empty = true;
   }
@@ -240,7 +241,6 @@ lock_acquire (struct lock *lock)
         for (e = list_begin (&((lock->holder)->donated_locks)); e != list_end (&((lock->holder)->donated_locks));
             e = list_next (e))
         {
-          struct lock *l = list_entry (e, struct lock, lockelem);
           if(&lock->lockelem == e)
           {
             found = true;
