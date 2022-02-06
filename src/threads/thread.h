@@ -104,9 +104,9 @@ struct thread
     int nice_value;
 
     /* Used for timer.c */
-    struct semaphore blocker_sema;      /* Semaphore for blocking thread. */
-    int64_t alarm_due_time;             /* Time when the thread alarm is due. */
-    struct list_elem blockedelem;       /* List element for all blocked threads */
+    struct semaphore blocker_sema;      /* Semaphore to block thread. */
+    int64_t alarm_due_time;             /* Due time for alarm */
+    struct list_elem blockedelem;       /* For list of blocked threads */
 
     struct list donated_locks;
     bool donated_lock_list_initialized;

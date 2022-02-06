@@ -8,7 +8,7 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
+Rakshit Patel <rakshit.patel@mail.utoronto.ca>
 FirstName LastName <email@domain.example>
 FirstName LastName <email@domain.example>
 
@@ -30,26 +30,68 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Added static global variables to hold a list of threads that are 
+put to sleep and a semaphore to control access to the list.
+    static struct list thread_due_time_list;
+    static struct semaphore blocked_thread_list_sema;
+
+Added to struct thread
+    struct semaphore blocker_sema; /* Semaphore to block thread. */
+    int64_t alarm_due_time;        /* Wake up time for alarm */
+    struct list_elem blockedelem;  /* List element for thread due time list. */
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
 
+timer_sleep() puts the current thread to sleep for a given amount of time
+and adds it to a list of threads that are put to sleep. The thread that 
+should wake up the earliest is kept at the front of the list.
+The timer interupt handler wakesup the first thread in the list and 
+removes it from the list.
+
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
+
+We insert the threads into the list such that the thread which should
+wake up the earliest is at the front of the list. This is allows us to 
+simply remove the first element if its wake up time has come. This takes 
+O(1) time on average because we expect most threads to have different wake 
+up times. However, it may take and O(n) when there are multiple threads with 
+the same wake up time.
 
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
 
+To avoid race conditions in timer_sleep(), we use a semaphore to 
+protect the blocked thread list from inserting multiple threads at once.
+This prevents unexpected behaviour such as incorreclty inserted elements
+or missing elements since all threads will be inserted one at a time.
+
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
+
+When a timer interupt occurs, there wont be any race conditions since all 
+the timer related data is stored within each thread and it cannot be 
+modified by another thread. This means that there will be no race, since 
+there are no shared resources. The only shared data structure is the 
+blocked thread list, but that is protected using a semaphore (explained in A4).
 
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+We chose this design because of its speed efficiency and it robustness 
+against race conditions. Another design we considered was to define a 
+new struct that would be inserted into the global list which conatians 
+a semaphore and due_time (wake up time) which corresponds to the thread 
+that called timer_sleep(). However, this design required us to be more 
+careful about race conditions, because now any thread might be able to 
+access the semaphore and wake up a thread before its due time.
 
              PRIORITY SCHEDULING
              ===================
@@ -95,6 +137,14 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Added global variable to store the load average value which is 
+updated every 100 ticks.
+    static int load_avg;
+
+Added to thread struct to store recent and nice values of the thread.
+    int recent_cpu_value;   /* Recent CPU value. */
+    int nice_value;         /* Nice value. */
+
 ---- ALGORITHMS ----
 
 >> C2: Suppose threads A, B, and C have nice values 0, 1, and 2.  Each
@@ -105,20 +155,27 @@ FirstName LastName <email@domain.example>
 timer  recent_cpu    priority   thread
 ticks   A   B   C   A   B   C   to run
 -----  --  --  --  --  --  --   ------
- 0
- 4
- 8
-12
-16
-20
-24
-28
-32
-36
+ 0     00  00  00  63  61  59   A
+ 4     04  01  02  62  61  59   A
+ 8     08  01  02  61  61  59   A
+12     12  01  02  60  61  59   B
+16     12  05  02  60  60  59   B
+20     12  09  02  60  59  59   A
+24     16  09  02  59  59  59   A
+28     20  09  02  58  59  59   B
+32     20  13  02  58  58  59   B
+36     20  17  02  58  57  59   C
 
 >> C3: Did any ambiguities in the scheduler specification make values
 >> in the table uncertain?  If so, what rule did you use to resolve
 >> them?  Does this match the behavior of your scheduler?
+
+An ambiguitiy we found was that we didnt know which thread to run in case 
+two threads have the same priority. 
+The rule we used to resolve this was to run the thread that was most recenlty run.
+Since we were inserting in deceanding order to the ready list and choosing the first 
+thread in the list to run, our scheduler would always choose the thread that was most 
+recenlty run when there was a tie between the priorities.
 
 >> C4: How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?

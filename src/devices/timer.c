@@ -241,7 +241,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 
   bool ready = true;
   /* Wake up all threads that reached the alarm_due_time */
-  while (ready && list_size (&thread_due_time_list) > 0) 
+  while (ready && !list_empty (&thread_due_time_list)) 
   {
     //struct sema_due_time_node *first = get_first_sema_due_time_node();
     struct thread *first = get_first_thread_due_time_node();
