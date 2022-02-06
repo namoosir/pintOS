@@ -32,6 +32,10 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+
+static struct list all_locks;
+static bool all_lock_list_init = false;
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -193,9 +197,56 @@ lock_init (struct lock *lock)
 {
   ASSERT (lock != NULL);
 
+  if(!all_lock_list_init){
+    list_init(&all_locks);
+    all_lock_list_init = true;
+  }
+
   lock->holder = NULL;
   sema_init (&lock->semaphore, 1);
+  list_push_front(&all_locks, &lock->alllockelem);
 }
+
+
+void
+donate_to_waiter_func(struct lock *l, struct thread *t, void *aux)
+{
+  if (aux == NULL) 
+  {
+    struct list *lock_waiters = &l->semaphore.waiters;
+    struct list_elem *e;
+
+    if (list_empty(lock_waiters)) return;
+
+    for (e = list_begin (lock_waiters); e != list_end (lock_waiters);
+            e = list_next (e))
+        {
+          struct thread *waiter = list_entry (e, struct thread, elem);
+          int t_priority = t->priority > t->received_priority ? t->priority : t->received_priority;
+          int l_priority = l->holder->priority > l->holder->received_priority ? l->holder->priority : l->holder->received_priority;
+          if(waiter == t && t_priority > l_priority)
+          {
+            l->holder->received_priority = t_priority;
+            break;
+          }
+        }
+  }
+}
+
+void
+lock_foreach(lock_action_func *func, struct thread* t, void *aux)
+{
+  struct list_elem *e;
+  for (e = list_begin (&all_locks); e != list_end (&all_locks);
+          e = list_next (e))
+  {
+    struct lock *lock = list_entry (e, struct lock, alllockelem);
+    if(lock->holder == t || lock->holder == NULL) continue;
+    func(lock, t, aux);
+  }
+}
+
+
 
 /* Acquires LOCK, sleeping until it becomes available if
    necessary.  The lock must not already be held by the current
@@ -214,6 +265,7 @@ lock_acquire (struct lock *lock)
 
   if(!thread_mlfqs)
   {    
+    
     int initial_sema_value = (lock->semaphore).value;
     bool downed = false;
 
@@ -230,10 +282,14 @@ lock_acquire (struct lock *lock)
     {
       //donate
       int current_priority = thread_get_priority(); //Greatest of donated and its own priority
-      int lock_holder_priority = (lock->holder)->priority; //TAKE MAX
+      int lock_holder_priority = (lock->holder)->priority > (lock->holder)->received_priority ? (lock->holder)->priority: (lock->holder)->received_priority; //TAKE MAX
       if (lock_holder_priority < current_priority) {
         (lock->holder)->received_priority = current_priority;
-        (lock->holder)->donated_from = thread_current();
+        list_push_front(&((lock->holder)->donated_from), &thread_current()->donatedelem);
+
+        void *donate_to_waiter = donate_to_waiter_func;
+        
+        lock_foreach(donate_to_waiter, lock->holder, NULL);
 
         bool found = false;
         struct list_elem *e;
@@ -283,11 +339,16 @@ lock_try_acquire (struct lock *lock)
   return success;
 }
 
+
+
+
+
 /* Releases LOCK, which must be owned by the current thread.
 
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
-   handler. */
+   handler. 
+*/
 void
 lock_release (struct lock *lock) 
 {
@@ -298,7 +359,6 @@ lock_release (struct lock *lock)
   {
     bool found = false;
     struct list_elem *e;
-    // list_push_front(&thread_current()->donated_locks, &lock->lockelem);
     struct thread *t = thread_current ();
     
     // Find the lock in the list of donated locks
@@ -316,20 +376,43 @@ lock_release (struct lock *lock)
 
     if ((lock->holder)->received_priority > (lock->holder)->priority && found) 
     {
-      // if (list_size(&((lock->semaphore).waiters)) > 0) {
-      //   list_less_func *compare_priority = compare_priority_func;
-
-      //   e = list_min(&((lock->semaphore).waiters), compare_priority, NULL);
-      //   t = list_entry (e, struct thread, elem);
-      //   int max_p = t->priority > t->received_priority ? t->priority : t->received_priority;
-      //   (lock->holder)->received_priority = max_p;
-      // } else {
-        (lock->holder)->received_priority = -1;
-      // }
+      struct list_elem *x;
+      for (x = list_begin (&((lock->holder)->donated_from)); x != list_end (&((lock->holder)->donated_from));
+            x = list_next(x))
+        {
+          struct thread *temp_donated = list_entry (x, struct thread, donatedelem);
+          struct list_elem *y;
+          for (y = list_begin (&((lock->semaphore).waiters)); y != list_end (&((lock->semaphore).waiters)); 
+                y = list_next (y))
+            {
+              struct thread *temp_semaphore_waiters = list_entry (y, struct thread, elem);
+              if (temp_donated == temp_semaphore_waiters) 
+              {
+                list_remove(x);
+              }
+            }
+        }
       
+      if (list_size(&((lock->holder)->donated_from)) > 0) {
+        list_less_func *compare_priority = compare_priority_func;
+
+        e = list_min(&((lock->holder)->donated_from), compare_priority, NULL);
+        t = list_entry (e, struct thread, donatedelem);
+        int max_p = t->priority > t->received_priority ? t->priority : t->received_priority;
+        
+        if (list_size(&(lock->holder)->donated_locks) > 0) (lock->holder)->received_priority = max_p;
+        else (lock->holder)->received_priority = -1;
+
+      } 
+      else 
+      {
+        (lock->holder)->received_priority = -1;
+      }
+
       lock->holder = NULL;
       sema_up (&lock->semaphore);
       return;
+      
     }
   }
   lock->holder = NULL;

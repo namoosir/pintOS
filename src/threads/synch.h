@@ -23,6 +23,7 @@ struct lock
     struct thread *holder;      /* Thread holding lock (for debugging). */
     struct semaphore semaphore; /* Binary semaphore controlling access. */
     struct list_elem lockelem;      /* List element for donated lock list. */
+    struct list_elem alllockelem;   /* List element for all lock list. */
   };
 
 void lock_init (struct lock *);
@@ -30,6 +31,11 @@ void lock_acquire (struct lock *);
 bool lock_try_acquire (struct lock *);
 void lock_release (struct lock *);
 bool lock_held_by_current_thread (const struct lock *);
+
+
+typedef void lock_action_func (struct lock *l, struct thread *t, void *aux);
+void donate_to_waiter_func(struct lock *l, struct thread *t, void* aux);
+void lock_foreach(lock_action_func *func, struct thread* t, void *aux);
 
 /* Condition variable. */
 struct condition 

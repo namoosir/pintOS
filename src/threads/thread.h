@@ -94,7 +94,10 @@ struct thread
 
     /* Used for priority donation */
     int received_priority;
-    struct thread* donated_from;
+    // struct thread* donated_from;
+    struct list donated_from;
+    struct list_elem donatedelem;
+
 
     /* Used for mlfqs */
     int recent_cpu_value;
@@ -147,7 +150,7 @@ const char *thread_name (void);
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
-/* Performs some operation on thread t, given auxiliary data AUX. */
+/* Performs some operation on lock l, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
 

@@ -440,7 +440,6 @@ thread_set_priority (int new_priority)
     thread_current ()->priority = new_priority;
     thread_yield ();
   }
-
 }
 
 /* 
@@ -490,8 +489,10 @@ calculate_priority_func(struct thread *t){
 */
 void
 change_all_priority(void){
+    enum intr_level old_level = intr_disable ();
     void *calculate_priority = calculate_priority_func;
     thread_foreach(calculate_priority, NULL);
+    intr_set_level (old_level);
 }
 
 /* 
@@ -507,8 +508,8 @@ thread_set_nice (int nice UNUSED)
   else if (nice < -20) thread_current ()->nice_value = -20;
   else thread_current()->nice_value = nice;
 
-  calculate_recent_cpu_func(thread_current(), NULL);
-  calculate_priority_func(thread_current());
+  // calculate_recent_cpu_func(thread_current(), NULL);
+  // calculate_priority_func(thread_current());
 
 }
 
@@ -570,8 +571,10 @@ calculate_recent_cpu_func(struct thread *t, void *aux)
 void
 change_all_recent_cpu (void)
 {
-    void *calculate_recent_cpu = calculate_recent_cpu_func;
-    thread_foreach(calculate_recent_cpu, NULL);
+  enum intr_level old_level = intr_disable ();
+  void *calculate_recent_cpu = calculate_recent_cpu_func;
+  thread_foreach(calculate_recent_cpu, NULL);
+  intr_set_level (old_level);
 } 
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -672,7 +675,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   t->received_priority = -1;
-  t->donated_from = NULL;
+  // t->donated_from = NULL;
+  list_init(&t->donated_from);
+
 
   t->alarm_due_time = -1;
   t->donated_lock_list_initialized = false;
@@ -698,6 +703,8 @@ init_thread (struct thread *t, const char *name, int priority)
       t->recent_cpu_value = thread_current ()->recent_cpu_value;
       t->nice_value = thread_current ()->nice_value;
     }
+  }else{
+    list_init(&t->donated_from);
   }
   
   old_level = intr_disable ();

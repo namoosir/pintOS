@@ -92,3 +92,28 @@ high_thread_func (void *lock_)
   lock_release (lock);
   msg ("High thread finished.");
 }
+
+
+/*
+all_locks
+
+1) a.holder = L
+2) b.holder = M  
+3) a.waiter = M (M donated to L)
+4) b.waiter = H (now H donated to M therefore M donates to L)
+
+
+
+thread z donated to thread x
+thread M donated to thread L
+thread H donated to thread M
+
+for each lock
+  if lock.holder == z 
+    continue
+  for waiter in lock
+    if waiter == x
+      lock.holder gets donated priority
+      break
+
+*/
