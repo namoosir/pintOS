@@ -19,7 +19,7 @@
 #endif
 
 /* A list for storing the alarm due time and the 
-   semaphore for blocking the current thread. */
+   semaphore for blocking the list. */
 static struct list thread_due_time_list;
 static struct semaphore blocked_thread_list_sema;
 
@@ -46,7 +46,8 @@ timer_init (void)
 
   /* timer_init is called once, so we initaizlize the list here */
   list_init (&thread_due_time_list);
-  // initializating semaphore to lock the list
+  
+  /* initializating semaphore to lock the list */
   sema_init(&blocked_thread_list_sema, 1);
 }
 
@@ -95,7 +96,12 @@ timer_elapsed (int64_t then)
   return timer_ticks () - then;
 }
 
-/* ----------- */
+/* 
+  A compartor for comparing priority of 2 threads.
+  Returns true is a has lower priority than b.
+  False otherwise. This allows us to insert in
+  ascending order.
+*/
 list_less_func compare_ticks_func;
 bool
 compare_ticks_func (const struct list_elem *a, const struct list_elem *b, void *aux)
@@ -109,7 +115,9 @@ compare_ticks_func (const struct list_elem *a, const struct list_elem *b, void *
   return NULL;
 }
 
-/* ----------- */
+/* 
+  Initialize the semaphore for blocking the thread and set the due time.
+*/
 void
 thread_due_time_init(struct thread *t, int64_t alarm_due_time)
 {
@@ -215,7 +223,10 @@ timer_print_stats (void)
 }
 
 
-/* ----------- */
+/* 
+  Get the first hread from list.
+  The first thread in the list is the one with the lowest priority.
+*/
 struct thread *
 get_first_thread_due_time_node (void)
 {
@@ -224,7 +235,9 @@ get_first_thread_due_time_node (void)
   return t;
 }
 
-/* ----------- */
+/* 
+  Unblock the given thread.
+*/
 void
 unblock_sleeping_thread (struct thread *first)
 {
