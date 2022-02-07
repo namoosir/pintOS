@@ -98,10 +98,10 @@ timer_elapsed (int64_t then)
 /* ----------- */
 list_less_func compare_ticks_func;
 bool
-compare_ticks_func(const struct list_elem *a, const struct list_elem *b, void *aux)
+compare_ticks_func (const struct list_elem *a, const struct list_elem *b, void *aux)
 {
-
-  if(aux == NULL){
+  if(aux == NULL)
+  {
     struct thread *t1 = list_entry (a, struct thread, blockedelem);
     struct thread *t2 = list_entry (b, struct thread, blockedelem);
     return t1->alarm_due_time < t2->alarm_due_time;
@@ -132,16 +132,16 @@ timer_sleep (int64_t ticks)
   int64_t start = timer_ticks ();
   list_less_func* compare_ticks = compare_ticks_func;
 
-  struct thread *curr_thread = thread_current();
-  thread_due_time_init(curr_thread, start + ticks);
+  struct thread *curr_thread = thread_current ();
+  thread_due_time_init (curr_thread, start + ticks);
 
   /* Only allow one thread to insert into the list at a time */
-  sema_down(&blocked_thread_list_sema);
+  sema_down (&blocked_thread_list_sema);
   list_insert_ordered (&thread_due_time_list, &curr_thread->blockedelem, compare_ticks, NULL);
-  sema_up(&blocked_thread_list_sema);
+  sema_up (&blocked_thread_list_sema);
   
   /* Put current thread to sleep */
-  sema_down(&curr_thread->blocker_sema);
+  sema_down (&curr_thread->blocker_sema);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -217,18 +217,20 @@ timer_print_stats (void)
 
 /* ----------- */
 struct thread *
-get_first_thread_due_time_node(void)
+get_first_thread_due_time_node (void)
 {
-  struct list_elem *e = list_begin(&thread_due_time_list);
-  struct thread *t = list_entry(e, struct thread, blockedelem);
+  struct list_elem *e = list_begin (&thread_due_time_list);
+  struct thread *t = list_entry (e, struct thread, blockedelem);
   return t;
 }
 
 /* ----------- */
 void
-unblock_sleeping_thread(struct thread *first){
-  if(first != NULL && &first->blocker_sema != NULL){
-    sema_up(&first->blocker_sema);
+unblock_sleeping_thread (struct thread *first)
+{
+  if(first != NULL && &first->blocker_sema != NULL)
+  {
+    sema_up (&first->blocker_sema);
     list_pop_front (&thread_due_time_list);
   }
 }
@@ -243,11 +245,10 @@ timer_interrupt (struct intr_frame *args UNUSED)
   /* Wake up all threads that reached the alarm_due_time */
   while (ready && !list_empty (&thread_due_time_list)) 
   {
-    //struct sema_due_time_node *first = get_first_sema_due_time_node();
-    struct thread *first = get_first_thread_due_time_node();
+    struct thread *first = get_first_thread_due_time_node ();
     if (ticks >= first->alarm_due_time)
     {
-      unblock_sleeping_thread(first);
+      unblock_sleeping_thread (first);
       continue;
     }
     ready = false;

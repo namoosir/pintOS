@@ -85,9 +85,11 @@ compare_priority_func (const struct list_elem *a, const struct list_elem *b, voi
     struct thread *t1 = list_entry (a, struct thread, elem);
     struct thread *t2 = list_entry (b, struct thread, elem);
   
-    // Max of received priority and given priority
-    int t1_priority = t1->priority >= t1->received_priority ? t1->priority : t1->received_priority;
-    int t2_priority = t2->priority >= t2->received_priority ? t2->priority : t2->received_priority;
+    /* Max of received priority and given priority */
+    int t1_priority = t1->priority >= t1->received_priority 
+                      ? t1->priority : t1->received_priority;
+    int t2_priority = t2->priority >= t2->received_priority 
+                      ? t2->priority : t2->received_priority;
     return t1_priority > t2_priority;
   }
   return NULL;
@@ -172,19 +174,18 @@ thread_tick (void)
     Every 1 tick, we increase the recent cpu value of the
     current running thread.  
   */
-  if(thread_mlfqs)
+  if (thread_mlfqs)
   {
-    if (timer_ticks() % TIMER_FREQ == 0) 
+    if (timer_ticks () % TIMER_FREQ == 0) 
     {
-      calculate_load_avg();
-      change_all_recent_cpu();
+      calculate_load_avg ();
+      change_all_recent_cpu ();
     }
-    //Recalculate priority
-    if (timer_ticks() % 4 == 0) 
+    if (timer_ticks () % 4 == 0) 
     {
-      change_all_priority();
+      change_all_priority ();
     }
-    increase_recent_cpu_value();    
+    increase_recent_cpu_value ();    
   }
 
   /* Enforce preemption. */
@@ -303,10 +304,13 @@ thread_unblock (struct thread *t)
   if(!intr_context())
   {
     struct thread *current_thread = thread_current();
-    int current_thread_priority = thread_get_priority(); //current_thread->priority;
-    int t_priority = t->priority > t->received_priority ? t->priority : t->received_priority;
-    if(current_thread != idle_thread){
-      if(t_priority > current_thread_priority){
+    int current_thread_priority = thread_get_priority();
+    int t_priority = t->priority > t->received_priority 
+                     ? t->priority : t->received_priority;
+    if(current_thread != idle_thread)
+    {
+      if(t_priority > current_thread_priority)
+      {
          thread_yield ();
       }
     } 
@@ -386,7 +390,8 @@ thread_yield (void)
 
   old_level = intr_disable ();
 
-  if (cur != idle_thread){
+  if (cur != idle_thread)
+  {
     list_less_func *compare_priority = compare_priority_func;
     list_insert_ordered (&ready_list, &cur->elem, compare_priority, NULL);
   }
@@ -428,11 +433,15 @@ thread_set_priority (int new_priority)
 {
   
 
-  if(thread_mlfqs){
+  if(thread_mlfqs)
+  {
     return;
-  }else{
+  }
+  else
+  {
     enum intr_level old_level  = intr_disable ();
-    if (thread_current ()->priority <= new_priority) {
+    if (thread_current ()->priority <= new_priority) 
+    {
       thread_current ()->priority = new_priority;
       return;
     }
@@ -507,10 +516,6 @@ thread_set_nice (int nice UNUSED)
   if (nice > 20) thread_current ()->nice_value = 20;
   else if (nice < -20) thread_current ()->nice_value = -20;
   else thread_current()->nice_value = nice;
-
-  // calculate_recent_cpu_func(thread_current(), NULL);
-  // calculate_priority_func(thread_current());
-
 }
 
 /* Returns the current thread's nice value. */
@@ -534,7 +539,8 @@ calculate_load_avg(void)
 {
   int ready_threads = list_size(&ready_list);
   if(thread_current() != idle_thread) ready_threads++;
-  load_avg = multiply_fp_fp(to_fixed_point(59)/60, load_avg) + (to_fixed_point(1)/60) * ready_threads;
+  load_avg = multiply_fp_fp(to_fixed_point(59)/60, load_avg) 
+             + (to_fixed_point(1)/60) * ready_threads;
 }
 
 /* 
@@ -547,28 +553,41 @@ thread_get_load_avg (void)
   return to_integer_round_nearest( load_avg * 100 );
 }
 
+/*
+  Increases the current threads recent cpu by 1.
+*/
 void 
 increase_recent_cpu_value(void) {
   if (thread_current () != idle_thread)
   {
     int recent = thread_current()->recent_cpu_value;
     recent += to_fixed_point(1);
-    //Round down to lower recent cpu slightly
+    /* Round down in order to lower recent cpu slightly */
     recent = to_integer_round_zero(recent);
     thread_current()->recent_cpu_value = to_fixed_point(recent);
   }
 }
 
+/*
+  Calculates the given thread's recent cpu value using the following formula:
+  recent_cpu = (2*load_avg/2*load_avg + 1)*recent_cpu + nice
+  Where load_avg is the system load average and nice is the nice value
+*/
 void
 calculate_recent_cpu_func(struct thread *t, void *aux)
 {
   if (aux == NULL) 
   {
     int32_t coefficient = divide_fp_fp(load_avg*2, add_fp_r(load_avg*2, 1));
-    t->recent_cpu_value = add_fp_r(multiply_fp_fp(coefficient, t->recent_cpu_value), t->nice_value); 
+    t->recent_cpu_value = add_fp_r(multiply_fp_fp(coefficient, t->recent_cpu_value), 
+                                   t->nice_value); 
   }
 }
 
+/*
+  Updates the recent cpu value for all threads by iterating over the
+  all_list.
+*/
 void
 change_all_recent_cpu (void)
 {
@@ -676,7 +695,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   t->received_priority = -1;
-  // t->donated_from = NULL;
+
   list_init(&t->donated_from);
 
 

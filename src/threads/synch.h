@@ -34,8 +34,8 @@ bool lock_held_by_current_thread (const struct lock *);
 
 
 typedef void lock_action_func (struct lock *l, struct thread *t, void *aux);
-void donate_to_waiter_func(struct lock *l, struct thread *t, void* aux);
-void lock_foreach(lock_action_func *func, struct thread* t, void *aux);
+void donate_to_waiter_func (struct lock *l, struct thread *t, void* aux);
+void lock_foreach (lock_action_func *func, struct thread* t, void *aux);
 
 /* Condition variable. */
 struct condition 
