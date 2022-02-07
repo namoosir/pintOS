@@ -426,15 +426,19 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  
+
   if(thread_mlfqs){
     return;
   }else{
+    enum intr_level old_level  = intr_disable ();
     if (thread_current ()->priority <= new_priority) {
       thread_current ()->priority = new_priority;
       return;
     }
     thread_current ()->priority = new_priority;
     thread_yield ();
+    intr_set_level (old_level);
   }
 }
 
@@ -545,7 +549,8 @@ thread_get_load_avg (void)
 
 void 
 increase_recent_cpu_value(void) {
-  if (thread_current () != idle_thread){
+  if (thread_current () != idle_thread)
+  {
     int recent = thread_current()->recent_cpu_value;
     recent += to_fixed_point(1);
     //Round down to lower recent cpu slightly

@@ -137,7 +137,6 @@ sema_up (struct semaphore *sema)
   if (!not_empty) sema->value++;
 
   intr_set_level (old_level);
-  // if(thread_to_remove->priority > thread_get_priority() && not_empty) thread_yield ();
 }
 
 static void sema_test_helper (void *sema_);
@@ -339,10 +338,6 @@ lock_try_acquire (struct lock *lock)
   return success;
 }
 
-
-
-
-
 /* Releases LOCK, which must be owned by the current thread.
 
    An interrupt handler cannot acquire a lock, so it does not
@@ -361,7 +356,10 @@ lock_release (struct lock *lock)
     struct list_elem *e;
     struct thread *t = thread_current ();
     
-    // Find the lock in the list of donated locks
+    /* This loop ensures a donation has occured for this lock
+       If a donation has occured, then we need to remove the lock 
+       from the list of donated locks.
+    */
     for (e = list_begin (&t->donated_locks); e != list_end (&t->donated_locks);
           e = list_next (e))
       {
@@ -374,6 +372,9 @@ lock_release (struct lock *lock)
         }
       }
 
+    /* 
+      We find the highest priority thread that is waiting on this lock.
+    */
     if ((lock->holder)->received_priority > (lock->holder)->priority && found) 
     {
       struct list_elem *x;
@@ -394,18 +395,26 @@ lock_release (struct lock *lock)
         }
       
       if (list_size(&((lock->holder)->donated_from)) > 0) {
+        
+        /* As long as we need donations, 
+           we keep donating the highest priority 
+           thread.
+        */
         list_less_func *compare_priority = compare_priority_func;
-
+        
+        /* This gets the highest priority thread in the list */
         e = list_min(&((lock->holder)->donated_from), compare_priority, NULL);
         t = list_entry (e, struct thread, donatedelem);
         int max_p = t->priority > t->received_priority ? t->priority : t->received_priority;
         
+        /* Pass the highest prioirty on */
         if (list_size(&(lock->holder)->donated_locks) > 0) (lock->holder)->received_priority = max_p;
         else (lock->holder)->received_priority = -1;
 
       } 
       else 
       {
+        /* We revert the donated priority if donating is finished */
         (lock->holder)->received_priority = -1;
       }
 

@@ -94,7 +94,6 @@ struct thread
 
     /* Used for priority donation */
     int received_priority;
-    // struct thread* donated_from;
     struct list donated_from;
     struct list_elem donatedelem;
 
