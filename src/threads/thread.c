@@ -462,9 +462,11 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  if(thread_mlfqs){
+  if (thread_mlfqs) {
     return thread_current()->priority;
-  }else{
+  } 
+  else
+  {
     int given_priority = thread_current ()->priority;
     int recieved_priority = thread_current ()->received_priority;
     return given_priority >= recieved_priority ? given_priority : recieved_priority;
@@ -479,7 +481,8 @@ thread_get_priority (void)
   PRI_MIN (0) and PRI_MAX (63).
 */
 void 
-calculate_priority_func(struct thread *t){
+calculate_priority_func(struct thread *t)
+{
   int32_t quarter_recent_cpu = (t->recent_cpu_value)/4;
   int32_t two_nice = t->nice_value * 2;
   int32_t priority = add_fp_r(-1*quarter_recent_cpu, (PRI_MAX - two_nice));
@@ -497,11 +500,12 @@ calculate_priority_func(struct thread *t){
   all_list.
 */
 void
-change_all_priority(void){
-    enum intr_level old_level = intr_disable ();
-    void *calculate_priority = calculate_priority_func;
-    thread_foreach(calculate_priority, NULL);
-    intr_set_level (old_level);
+change_all_priority(void)
+{
+  enum intr_level old_level = intr_disable ();
+  void *calculate_priority = calculate_priority_func;
+  thread_foreach(calculate_priority, NULL);
+  intr_set_level (old_level);
 }
 
 /* 
@@ -557,7 +561,8 @@ thread_get_load_avg (void)
   Increases the current threads recent cpu by 1.
 */
 void 
-increase_recent_cpu_value(void) {
+increase_recent_cpu_value(void) 
+{
   if (thread_current () != idle_thread)
   {
     int recent = thread_current()->recent_cpu_value;
@@ -703,14 +708,16 @@ init_thread (struct thread *t, const char *name, int priority)
   t->donated_lock_list_initialized = false;
 
   
-  if (thread_mlfqs) {
+  if (thread_mlfqs) 
+  {
     /* 
       When the kernel boots the first thread, we 
       initilaize values for recent cpu and nice to 0.
       Also, computes the priority for the first thread
       (Should be 63). 
     */
-    if(t == initial_thread){
+    if(t == initial_thread)
+    {
       t->recent_cpu_value = 0;
       t->nice_value = 0;
       calculate_priority_func(initial_thread);
@@ -719,11 +726,14 @@ init_thread (struct thread *t, const char *name, int priority)
       If the thread is not the first thread, then we get the
       recent cpu and nice values from its parent thread.
     */
-    else{
+    else
+    {
       t->recent_cpu_value = thread_current ()->recent_cpu_value;
       t->nice_value = thread_current ()->nice_value;
     }
-  }else{
+  }
+  else
+  {
     list_init(&t->donated_from);
   }
   
