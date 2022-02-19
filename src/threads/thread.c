@@ -736,6 +736,9 @@ init_thread (struct thread *t, const char *name, int priority)
   {
     list_init(&t->donated_from);
   }
+
+  t->parent = running_thread();
+  sema_init(&t->process_sema, 0);
   
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

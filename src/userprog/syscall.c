@@ -3,6 +3,8 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
+#include "devices/shutdown.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -54,17 +56,35 @@ syscall_handler (struct intr_frame *f UNUSED)
   unsigned syscall_number;
   int args[3];
 
+  if (f->esp == NULL || is_kernel_vaddr(f->esp))
+  {
+      thread_exit ();
+  }
   //extract the syscall number
   copy_in (&syscall_number, f->esp, sizeof syscall_number);
+  // printf("***correct syscall: %d\n", syscall_number);
 
-  if (syscall_number == SYS_WRITE)
+  if(syscall_number == SYS_HALT)
   {
-    printf("***correct syscall\n");
+    shutdown_power_off();
+  }
+  else if(syscall_number == SYS_EXIT)
+  {
+    //extract the 3 arguments
+    copy_in (args, (uint32_t *) f->esp + 1, sizeof *args * 1);
+    // printf("status: ***%d\n", args[0]);
+    printf("%s: exit(%d)\n", thread_current()->name, args[0]);
+    thread_exit ();
+    
+  }
+  else if (syscall_number == SYS_WRITE)
+  {
+    
     //extract the 3 arguments
     copy_in (args, (uint32_t *) f->esp + 1, sizeof *args * 3);
-    printf("***%d\n", args[0]);
-    printf("***%p\n", args[1]);
-    printf("***%u\n", args[2]);
+    // printf("fd: ***%d\n", args[0]);
+    // printf("buffer address: ***%p\n", args[1]);
+    // printf("size: ***%u\n", args[2]);
 
 
     //execute the write on STDOUT_FILENO
@@ -73,6 +93,5 @@ syscall_handler (struct intr_frame *f UNUSED)
     //set the returned value
     f->eax = args[2];
   }
-
-  // thread_exit ();
+  
 }

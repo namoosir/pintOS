@@ -4,6 +4,7 @@
 #include <round.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <string.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
@@ -15,6 +16,7 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
@@ -38,8 +40,18 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  /* Get the name of the userprog */
+  char *raw_name = (char *)malloc ((strlen (file_name) + 1) * sizeof (char));
+  strlcpy (raw_name, file_name, PGSIZE);
+  char *actual_name = strtok_r(raw_name, " ", &raw_name);
+  // free(raw_name);
+
+  if (actual_name == NULL) 
+    return TID_ERROR;
+    
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (actual_name, PRI_DEFAULT, start_process, fn_copy);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -87,9 +99,15 @@ start_process (void *file_name_)
    does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) 
-{
-  while(1){}
-  return -1;
+{ 
+  //TODO: use semaphore and fix it
+  // while(1)
+  // {
+  //   thread_yield ();
+  // }
+  // return -1;
+  sema_down(&thread_current()->process_sema);
+
 }
 
 /* Free the current process's resources. */
@@ -115,6 +133,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+    sema_up(&thread_current()->parent->process_sema);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -222,11 +241,19 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+  char *raw_name = (char*) malloc ((strlen (file_name) + 1) * sizeof (char));
+  strlcpy (raw_name, file_name, PGSIZE);
+  char *actual_name = strtok_r(raw_name, " ", &raw_name);
+  // free(raw_name);
+
+  if (actual_name == NULL) 
+    return TID_ERROR;
+
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (actual_name);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", actual_name);
       goto done; 
     }
 
@@ -425,6 +452,133 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+/* 
+ Credits goes to: https://www.delftstack.com/howto/c/trim-string-in-c/ 
+*/
+char *trimString(char *str)
+{
+    char *end;
+
+    while(isspace((unsigned char)*str)) str++;
+
+    if(*str == 0)
+        return str;
+
+    end = str + strlen(str) - 1;
+    while(end > str && isspace((unsigned char)*end)) end--;
+
+    end[1] = '\0';
+
+    return str;
+} 
+
+void
+populate_stack (void **esp, const char *file_name)
+{
+  // memset(*esp, '|', 1);
+
+  char tokens_array[30][32];
+  char *token;
+
+  //Iterate over tokens
+  char *args = (char *) malloc ((sizeof (char)) * (strlen (file_name) + 1));
+  strlcpy(args, file_name, PGSIZE);
+  int i = 0;
+  // int total_chars = 0;
+ 
+  while ((token = strtok_r(args, " ", &args)))
+  {
+    strlcpy (tokens_array[i], token, (strlen(token) + 1) * sizeof (char));
+
+    // Stores the trimmed string incase there is multiple spaces
+    char* str = trimString(tokens_array[i]);
+    strlcpy(tokens_array[i], str, (strlen(str) + 1) * sizeof (char));
+
+    i++;
+  }
+
+  // printf("I: %d", i);
+  /* Reverse all the tokens the strings */
+  // for(int j = 0; j < i; j++)
+  // {
+  //   revstr(tokens_array[j]);
+  // }
+  
+  // for(int j = 0; j < i; j++)
+  // {
+  //   printf("Word: %s\n", tokens_array[j]);
+  // }
+
+
+  char *address[30];
+  /* Push the array items in reverse order onto the stack */
+  for(int j = i-1; j >= 0; j--)
+  {
+    /* Push delimiter first, then push the reversed string */
+    // printf("LOOPING \n");
+    *esp -= 1;
+    memcpy(*esp, "\0", 1);
+    
+    *esp -= strlen(tokens_array[j]);
+    memcpy(*esp, tokens_array[j], strlen(tokens_array[j]));
+
+    address[j] = (char*) *esp;
+  }
+
+
+  // for(int k = 0; k < i; k++)
+  // {
+  //   printf("Address: %p\n", address[k]);
+  // }
+
+  int esp_address = abs((int) *esp);
+  int word_align_offset = 4 - (esp_address % 4);
+  // printf("Offset: %d\n", word_align_offset);
+
+  /* word align the stack */
+  if(word_align_offset != 0)
+  {
+    // printf("ESP: %d\n", esp_address);
+    // printf("MOD: %d\n", esp_address % 4);
+    // printf("IN HERE\n");
+    
+    // printf("Offset: %d\n", word_align_offset);
+    uint8_t word_align = 0;
+    *esp -= word_align_offset;
+    memset(*esp, 0, word_align_offset);
+  }
+
+  /* Push 4 sentenial bytes */
+  *esp -= 4;
+  memset(*esp, 0, 4);
+
+  /* Push the addresses of the arguments */
+  for(int j = i-1; j >= 0; j--)
+  {
+    // printf("ESP pointer: %p\n", *esp);
+    *esp -= sizeof(int);
+    memcpy(*esp, &address[j], sizeof(int));
+  }
+
+  /* Push the previous address onto the stack */
+  // printf("ESP pointer: %p\n", *esp);
+
+  *esp -= sizeof(int);
+  char* head = (char*)*esp + sizeof(int);
+
+  memcpy(*esp, &head, sizeof(int));
+
+  /* Push the number of arguments onto the stack */
+  *esp -= sizeof(int);
+  memset(*esp, i, 1);
+
+  /* Push the address of the return address onto the stack */
+  *esp -= sizeof(int);
+  memset(*esp, 0, sizeof(int));
+
+  // free((char*)args); //TODO: Make free work!!
+}
+
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
@@ -439,8 +593,9 @@ setup_stack (void **esp, const char *file_name)
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success) 
       {
-        *esp = PHYS_BASE - 12;
-        
+        *esp = PHYS_BASE;
+        populate_stack(esp, file_name);
+        // hex_dump((uintptr_t) PHYS_BASE - 76, *esp, 76, true);
       }
       else
         palloc_free_page (kpage);

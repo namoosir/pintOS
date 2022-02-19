@@ -110,6 +110,9 @@ struct thread
     struct list donated_locks;
     bool donated_lock_list_initialized;
 
+    struct semaphore process_sema;      /* Semaphore for processes. */
+    struct thread *parent;              /* Parent thread. */
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
