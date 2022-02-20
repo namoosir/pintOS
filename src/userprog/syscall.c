@@ -124,7 +124,8 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if (syscall_number == SYS_CREATE)
   {
-    if (!*(int*)f->esp + 1 || args[1] < 0)
+
+    if (*(int*)f->esp + 1 == NULL || *(int*)f->esp + 2 <= 0)
     {
       exit(-1);
     }
