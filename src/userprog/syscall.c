@@ -39,7 +39,6 @@ put_user (uint8_t *udst, uint8_t byte)
   return error_code != -1;
 }
 
-// TODO: do error checking to make sure addresses are legal
 static void
 copy_in (void *dst_, const void *usrc_, size_t size)
 {
@@ -56,37 +55,57 @@ syscall_handler (struct intr_frame *f UNUSED)
   unsigned syscall_number;
   int args[3];
 
-  if (f->esp == NULL || is_kernel_vaddr(f->esp))
+  // Handle invalid stack pointer 
+  // TODO: check validity of the other pointers
+  // TODO: dereference the stack pointers
+  if (f->esp == NULL || is_kernel_vaddr(f->esp) || f->esp <= (void*)0x08048000
+      // || is_kernel_vaddr(f->esp + 1) || f->esp + 1 <= (void*)0x08048000
+      // || is_kernel_vaddr(f->esp + 2) || f->esp + 2 <= (void*)0x08048000
+      // || is_kernel_vaddr(f->esp + 3) || f->esp + 3 <= (void*)0x08048000
+      || is_kernel_vaddr((void *)((int *)f->esp + 1)) || (void *)((int *)f->esp + 1) <= (void *)0x08048000
+      || is_kernel_vaddr((void *)((int *)f->esp + 2)) || (void *)((int *)f->esp + 2) <= (void *)0x08048000
+      || is_kernel_vaddr((void *)((int *)f->esp + 3)) || (void *)((int *)f->esp + 3) <= (void *)0x08048000)
   {
-      thread_exit ();
+    // printf("as;dlkfja;lkdfj;alkdjf;kad;lf\n");
+    //print exit statement
+    printf("%s: exit(%d)\n", thread_current()->name, -1);
+
+    //exit from the thread
+    thread_exit ();
   }
+
   //extract the syscall number
   copy_in (&syscall_number, f->esp, sizeof syscall_number);
-  // printf("***correct syscall: %d\n", syscall_number);
+
+  if (syscall_number < 0 || syscall_number > SYS_INUMBER) 
+  {
+    printf("%s: exit(%d)\n", thread_current()->name, -1);
+
+    //exit from the thread
+    thread_exit ();
+  }
+
+  //extract the 3 arguments
+  copy_in (args, (uint32_t *) f->esp + 1, sizeof *args * 3);
 
   if(syscall_number == SYS_HALT)
   {
+    //shut down the system
     shutdown_power_off();
   }
-  else if(syscall_number == SYS_EXIT)
+  else if (syscall_number == SYS_EXIT)
   {
-    //extract the 3 arguments
-    copy_in (args, (uint32_t *) f->esp + 1, sizeof *args * 1);
-    // printf("status: ***%d\n", args[0]);
+    //print exit statement
     printf("%s: exit(%d)\n", thread_current()->name, args[0]);
-    thread_exit ();
-    
+
+    //set the returned value
+    f->eax = args[0];
+
+    //exit from the thread
+    thread_exit ();    
   }
   else if (syscall_number == SYS_WRITE)
   {
-    
-    //extract the 3 arguments
-    copy_in (args, (uint32_t *) f->esp + 1, sizeof *args * 3);
-    // printf("fd: ***%d\n", args[0]);
-    // printf("buffer address: ***%p\n", args[1]);
-    // printf("size: ***%u\n", args[2]);
-
-
     //execute the write on STDOUT_FILENO
     putbuf (args[1], args[2]);
 
