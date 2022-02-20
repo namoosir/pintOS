@@ -49,6 +49,16 @@ copy_in (void *dst_, const void *usrc_, size_t size)
     *dst = get_user (usrc);
 }
 
+/* Exit from the thread with status code status*/
+static void
+exit (int status)
+{
+  printf("%s: exit(%d)\n", thread_current()->name, status);
+  
+  //exit from the thread
+  thread_exit ();
+}
+
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
@@ -66,27 +76,31 @@ syscall_handler (struct intr_frame *f UNUSED)
       || is_kernel_vaddr((void *)((int *)f->esp + 2)) || (void *)((int *)f->esp + 2) <= (void *)0x08048000
       || is_kernel_vaddr((void *)((int *)f->esp + 3)) || (void *)((int *)f->esp + 3) <= (void *)0x08048000)
   {
-    // printf("as;dlkfja;lkdfj;alkdjf;kad;lf\n");
-    //print exit statement
-    printf("%s: exit(%d)\n", thread_current()->name, -1);
-
-    //exit from the thread
-    thread_exit ();
+    exit(-1);
   }
-
+  // hex_dump((uintptr_t) PHYS_BASE - 76, f->esp, 76, false);
+  // printf("esp + 0: %p", ((char*)f->esp));
+  // printf("esp + 1: %p", ((char*)f->esp + 1));
+  // printf("esp + 2: %p", ((char*)f->esp + 2));
+  // printf("esp + 3: %p", ((char*)f->esp + 3));
+  // 0x804efff; 0x804f000; 0x804f001; 0x804f002;
+  // 0xfffff264;
+  // 0x804efff; 0x804f000; 0x804f001; 0x804f002
   //extract the syscall number
   copy_in (&syscall_number, f->esp, sizeof syscall_number);
 
   if (syscall_number < 0 || syscall_number > SYS_INUMBER) 
   {
-    printf("%s: exit(%d)\n", thread_current()->name, -1);
-
-    //exit from the thread
-    thread_exit ();
+    exit(-1);
   }
 
   //extract the 3 arguments
   copy_in (args, (uint32_t *) f->esp + 1, sizeof *args * 3);
+
+  // for(int i = 0; i < 3; i++)
+  // {
+  //   printf("args[%d]: %d\n", i, args[i]);
+  // }
 
   if(syscall_number == SYS_HALT)
   {
@@ -95,14 +109,10 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if (syscall_number == SYS_EXIT)
   {
-    //print exit statement
-    printf("%s: exit(%d)\n", thread_current()->name, args[0]);
-
     //set the returned value
     f->eax = args[0];
 
-    //exit from the thread
-    thread_exit ();    
+    exit(args[0]);
   }
   else if (syscall_number == SYS_WRITE)
   {
@@ -112,5 +122,29 @@ syscall_handler (struct intr_frame *f UNUSED)
     //set the returned value
     f->eax = args[2];
   }
-  
+  else if (syscall_number == SYS_CREATE)
+  {
+    if (!*(int*)f->esp + 1 || args[1] < 0)
+    {
+      exit(-1);
+    }
+    //create the file
+    bool success = filesys_create(args[0], args[1]);
+
+    //set the returned value
+    f->eax = success;
+  }
+  else if(syscall_number == SYS_REMOVE)
+  {
+    //remove the file
+    bool success = filesys_remove(args[0]);
+    
+    //set the returned value
+    f->eax = success;
+  }
+  //TODO: complete this
+  else if (syscall_number == SYS_OPEN)
+  {
+    // struct file* f = filesys_open()
+  }
 }
