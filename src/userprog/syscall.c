@@ -6,9 +6,11 @@
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
 #include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "pagedir.h"
+#include "devices/input.h"
 
 #define LOWEST_ADDR ((void *) 0x08048000)
-
 
 static void syscall_handler (struct intr_frame *);
 
@@ -16,10 +18,6 @@ void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-  // 0xc0000000;3221225472; UPPER
-  // 0xbfffff28;3221225256; CURRENT LOWER
-  // 0x20101234;537924148; INPUT
-  // 0x08048000;134512640; LOWER
 }
 
 /* Reads a byte at user virtual address UADDR.
@@ -65,11 +63,26 @@ copy_in (void *dst_, const void *usrc_, size_t size)
 
   for (; size > 0; size--, dst++, usrc++)
   {
-    if(is_kernel_vaddr((void*)usrc) || usrc == NULL || (void*)usrc <= LOWEST_ADDR)
+    //ensure that usrc is on the stack
+    if (is_kernel_vaddr((void*)usrc) || usrc == NULL || (void*)usrc <= LOWEST_ADDR)
       exit(-1);
     *dst = get_user (usrc);
   }
 }
+
+
+static bool
+bad_ptr_arg(int arg)
+{
+  if ((const char*)arg == NULL || 
+        (void*)arg <= LOWEST_ADDR || is_kernel_vaddr((void *)arg) ||
+        pagedir_get_page(thread_current ()->pagedir, (void*)arg) == NULL)
+  {
+    return true;
+  }
+  return false;
+}
+
 
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
@@ -80,9 +93,8 @@ syscall_handler (struct intr_frame *f UNUSED)
   //extract the syscall number
   copy_in (&syscall_number, f->esp, sizeof syscall_number);
 
-  //TODO: OFFICE HOURS
-  //pg_round_down
-  if ((int)syscall_number < 0 || syscall_number > SYS_INUMBER) 
+  //check if the entire address of the syscall is in the stack
+  if ((uint32_t) pg_round_up (f->esp) - (uint32_t) f->esp < sizeof(int)) 
   {
     exit(-1);
   }
@@ -112,26 +124,11 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if (syscall_number == SYS_CREATE)
   {
-    //Print args
-    // for(int i = 0; i < 3; i++)
-    // {
-    //   printf("args[%d]: %d\n", i, args[i]);
-    // }
-
-    //TODO: OFFICE HOURS
-    //pagedir_get_page
-    if ((const char*)args[0] == NULL || (int)args[1] < 0 || 
-        (void*)args[0] <= LOWEST_ADDR || is_kernel_vaddr((void *)args[0]))
+    // ensure that argument is a valid pointer
+    if (bad_ptr_arg(args[0]) || (int)args[1] < 0)
     {
       exit(-1);
     }
-    // 0x804b290
-
-    // if((void *)args[0] < f->esp)
-    // {
-    //   printf("address of file %d address of stack pointer %u\n", (void *)args[0], f->esp);
-    //   exit(-1);
-    // }
 
     //create the file
     bool success = filesys_create((const char*)args[0], args[1]);
@@ -139,11 +136,11 @@ syscall_handler (struct intr_frame *f UNUSED)
     //set the returned value
     f->eax = success;
   }
-  else if(syscall_number == SYS_REMOVE)
+  else if (syscall_number == SYS_REMOVE)
   {
 
-    if ((const char*)args[0] == NULL || 
-        (void*)args[0] <= LOWEST_ADDR || is_kernel_vaddr((void *)args[0]))
+    // ensure that argument is a valid pointer
+    if (bad_ptr_arg(args[0]))
     {
       exit(-1);
     }
@@ -160,6 +157,106 @@ syscall_handler (struct intr_frame *f UNUSED)
   //Array[128] idx is fd, content is pointer to file
   else if (syscall_number == SYS_OPEN)
   {
-    // struct file* f = filesys_open()
+    if (bad_ptr_arg(args[0]))
+    {
+      exit(-1);
+    }
+
+    struct file* open_file = filesys_open((const char*)args[0]);
+
+    if (open_file == NULL)
+    {
+      f->eax = -1;
+    }
+    else
+    {
+      int i;
+
+      for (i = 2; i < 128; i++) 
+      {
+        //Find first empty slot for fd
+        if (thread_current ()->fd_array[i] == NULL)
+        {
+          thread_current ()->fd_array[i] = open_file;
+          break;
+        }
+      }
+
+      f->eax = i;
+    }
   }
+  else if(syscall_number == SYS_CLOSE)
+  {
+    if (args[0] != 0 && args[0] != 1 && args[0] < 128 && args[0] > 0)
+    {
+      if (thread_current()->fd_array[args[0]] != NULL) 
+      {
+        file_close(thread_current()->fd_array[args[0]]);
+        thread_current()->fd_array[args[0]] = NULL;
+      }
+    }
+  }
+  else if (syscall_number == SYS_READ)
+  {
+    if (bad_ptr_arg(args[1]))
+    {
+      exit(-1);
+    }
+    
+    if (args[0] != 0 && args[0] != 1 && args[0] < 128 && args[0] > 0) 
+    {
+      if (thread_current()->fd_array[args[0]] != NULL) 
+      {
+        int size = args[2];
+        char* buffer = (char *)args[1];
+        //stdin
+        if(args[0] == 0)
+        {
+          int i  = 0;
+          //Keep reading bytes until buffer is full
+          while(i < size)
+          {
+            buffer[i] = input_getc();
+            i++;
+          }
+          f->eax = i;
+        }
+        //some other file
+        else
+        {
+          int read_bytes = file_read (thread_current()->fd_array[args[0]], buffer, size);
+          f->eax = read_bytes;
+        }
+      }
+      else
+      {
+        f->eax = -1;
+      }
+    } 
+    else
+    {
+      f->eax = -1;
+    }
+  }
+  else if (syscall_number == SYS_FILESIZE)
+  {
+    if (args[0] != 0 && args[0] != 1 && args[0] < 128 && args[0] > 0) 
+    {
+      if (thread_current()->fd_array[args[0]] != NULL) 
+      {
+        f->eax = file_length (thread_current()->fd_array[args[0]]);
+      }
+    }    
+  }
+  else if (syscall_number == SYS_TELL) 
+  {
+    if (args[0] != 0 && args[0] != 1 && args[0] < 128 && args[0] > 0) 
+    {
+      if (thread_current()->fd_array[args[0]] != NULL) 
+      {
+        f->eax = file_tell (thread_current()->fd_array[args[0]]);
+      }
+    }
+  }
+
 }

@@ -707,6 +707,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->alarm_due_time = -1;
   t->donated_lock_list_initialized = false;
 
+  //initialize the file descriptor array for this thread
+  #ifdef USERPROG
+    memset(t->fd_array, 0, 128 * sizeof (struct file*)); 
+  #endif
   
   if (thread_mlfqs) 
   {

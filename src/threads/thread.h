@@ -119,6 +119,7 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    struct file* fd_array[128];         /* Set of file descriptors */
 #endif
 
     /* Owned by thread.c. */
