@@ -11,6 +11,7 @@
 #include "devices/input.h"
 
 #define LOWEST_ADDR ((void *) 0x08048000)
+#define LARGE_WRITE_CHUNK 100
 
 static void syscall_handler (struct intr_frame *);
 
@@ -116,11 +117,67 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if (syscall_number == SYS_WRITE)
   {
-    //execute the write on STDOUT_FILENO
-    putbuf ((const char*)args[1], args[2]);
 
-    //set the returned value
-    f->eax = args[2];
+    if (bad_ptr_arg(args[1]))
+    {
+      exit(-1);
+    }
+    
+    if (args[0] != 0 && args[0] != 1 && args[0] < 128 && args[0] > 0) 
+    {
+      if (thread_current()->fd_array[args[0]] != NULL) 
+      {
+        int size = args[2];
+        char* buffer = (char *)args[1];
+        //stdout
+        if(args[0] == 1)
+        {
+          //execute the write on STDOUT_FILENO
+          //Write to buffer in chunks of 100 bytes
+          int total_written = 0;
+          bool break_into_chunks = false;
+          for(int i = 0; i < size; i += LARGE_WRITE_CHUNK)
+          {
+            int writing_size = size - i;
+
+            //if the writing size is less than 100, break into small chunks
+            if(writing_size > LARGE_WRITE_CHUNK)
+            {
+              break_into_chunks = true;
+              
+            } else
+            {
+              break_into_chunks = false;
+            }
+
+            //calculate the proper chunk size
+            if(break_into_chunks){
+              putbuf(buffer + i, LARGE_WRITE_CHUNK);
+              total_written += LARGE_WRITE_CHUNK;
+            }
+            else{
+              putbuf(buffer + i, size - i);
+              total_written += size-i;
+            }
+          } 
+          f->eax = total_written;
+        }
+        //write to some other file
+        else
+        {
+          int read_bytes = file_write (thread_current()->fd_array[args[0]], buffer, size);
+          f->eax = read_bytes;
+        }
+      }
+      else
+      {
+        f->eax = -1;
+      }
+    } 
+    else
+    {
+      f->eax = -1;
+    }
   }
   else if (syscall_number == SYS_CREATE)
   {
