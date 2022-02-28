@@ -23,6 +23,12 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+//Array of executable file pointers
+static struct file* executable_list[128];
+static int executable_list_idx = 0;
+static bool executable_list_unsuccess[128];
+static int executable_list_unsuccess_idx = 0;
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -52,8 +58,21 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (actual_name, PRI_DEFAULT, start_process, fn_copy);
 
+  if (thread_current ()->exec_sema.value == 0)
+  {
+    sema_down(&(thread_current ()->exec_sema));
+  }
+
+  
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+
+  if (executable_list_unsuccess[executable_list_unsuccess_idx] == true){
+    executable_list_unsuccess[executable_list_unsuccess_idx] == false;
+    executable_list_unsuccess_idx--;
+    return TID_ERROR;
+  }
+
   return tid;
 }
 
@@ -76,7 +95,11 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
+  {
+    executable_list_unsuccess[executable_list_unsuccess_idx] = true;
     thread_exit ();
+  }
+    
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -116,7 +139,11 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-
+  
+  file_close(executable_list[executable_list_idx]);
+  executable_list[executable_list_idx] = NULL;
+  executable_list_idx--;
+  
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -235,6 +262,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
   bool success = false;
   int i;
 
+  //Block parent thread to wait for child to finish loading
+  // printf("Before SEMA Down\n");
+  // sema_down(&(thread_current ()->parent->exec_sema));
+
+  // printf("After SEMA Down\n");
+
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
@@ -251,6 +284,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Open executable file. */
   file = filesys_open (actual_name);
+  
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", actual_name);
@@ -269,6 +303,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: error loading executable\n", file_name);
       goto done; 
     }
+
+  executable_list[executable_list_idx] = file;
+  executable_list_idx++;
+  executable_list_unsuccess_idx++;
+  file_deny_write(file);
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
@@ -340,7 +379,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+
+  sema_up(&(t->parent->exec_sema));
+
   return success;
 }
 

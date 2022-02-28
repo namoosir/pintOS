@@ -9,6 +9,7 @@
 #include "filesys/file.h"
 #include "pagedir.h"
 #include "devices/input.h"
+#include "process.h"
 
 #define LOWEST_ADDR ((void *) 0x08048000)
 #define LARGE_WRITE_CHUNK 100
@@ -147,7 +148,6 @@ syscall_handler (struct intr_frame *f UNUSED)
     
     if (args[0] != 0 && args[0] < 128 && args[0] > 0) 
     {
-
       int size = args[2];
       char* buffer = (char *)args[1];
       //stdout
@@ -301,8 +301,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       //stdin
       if(args[0] == 0)
       {
-
-        int i  = 0;
+        int i = 0;
         //Keep reading bytes until buffer is full
         while(i < size)
         {
@@ -364,6 +363,19 @@ syscall_handler (struct intr_frame *f UNUSED)
         file_seek (thread_current()->fd_array[args[0]], args[1]);
       }
     }
+  }
+  else if (syscall_number == SYS_EXEC)
+  {
+    if (bad_ptr_arg(args[0]))
+    {
+      exit(-1);
+    }
+    
+    // sema_down(&(thread_current ()->exec_sema));
+
+    tid_t child_pid = process_execute ((const char*) args[0]);
+
+    f->eax = child_pid;
   }
 
 }

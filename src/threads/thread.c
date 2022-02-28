@@ -710,6 +710,7 @@ init_thread (struct thread *t, const char *name, int priority)
   //initialize the file descriptor array for this thread
   #ifdef USERPROG
     memset(t->fd_array, 0, 128 * sizeof (struct file*)); 
+    sema_init(&t->exec_sema, 0);
   #endif
   
   if (thread_mlfqs) 

@@ -120,6 +120,7 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     struct file* fd_array[128];         /* Set of file descriptors */
+    struct semaphore exec_sema;         /* Semaphore for exec syscall */
 #endif
 
     /* Owned by thread.c. */
