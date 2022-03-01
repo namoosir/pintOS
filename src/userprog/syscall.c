@@ -15,6 +15,7 @@
 #define LARGE_WRITE_CHUNK 100
 
 static void syscall_handler (struct intr_frame *);
+void exit (int status);
 static struct semaphore file_modification_sema;
 
 void
@@ -50,7 +51,7 @@ put_user (uint8_t *udst, uint8_t byte)
 }
 
 /* Exit from the thread with status code status*/
-static void
+void
 exit (int status)
 {
   printf("%s: exit(%d)\n", thread_current()->name, status);
@@ -144,13 +145,14 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
       exit(-1);
     }
-    //Prevent other tasks when writing
-    sema_down(&file_modification_sema);
+
     
     if (args[0] != 0 && args[0] < 128 && args[0] > 0) 
     {
       int size = args[2];
       char* buffer = (char *)args[1];
+      //Prevent other tasks when writing
+      sema_down(&file_modification_sema);
       //stdout
       if(args[0] == 1)
       {
@@ -186,6 +188,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       }
       else if (thread_current()->fd_array[args[0]] != NULL) 
       {
+        
         //write to some other file
         int read_bytes = file_write (thread_current()->fd_array[args[0]], buffer, size);
         f->eax = read_bytes;
@@ -216,8 +219,10 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
       exit(-1);
     }
+    sema_down(&file_modification_sema);
     //create the file
     bool success = filesys_create((const char*)args[0], args[1]);
+    sema_up(&file_modification_sema);
 
     //set the returned value
     f->eax = success;
@@ -250,9 +255,9 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
       exit(-1);
     }
-
+    sema_down(&file_modification_sema);
     struct file* open_file = filesys_open((const char*)args[0]);
-
+    sema_up(&file_modification_sema);
     if (open_file == NULL)
     {
       f->eax = -1;
@@ -280,8 +285,10 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
       if (thread_current()->fd_array[args[0]] != NULL) 
       {
+        sema_down(&file_modification_sema);
         file_close(thread_current()->fd_array[args[0]]);
         thread_current()->fd_array[args[0]] = NULL;
+        sema_up(&file_modification_sema);
       }
     }
 
@@ -341,7 +348,9 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
       if (thread_current()->fd_array[args[0]] != NULL) 
       {
+        sema_down(&file_modification_sema);
         f->eax = file_length (thread_current()->fd_array[args[0]]);
+        sema_up(&file_modification_sema);
       }
     }    
   }
@@ -351,7 +360,9 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
       if (thread_current()->fd_array[args[0]] != NULL) 
       {
+        sema_down(&file_modification_sema);
         f->eax = file_tell (thread_current()->fd_array[args[0]]);
+        sema_up(&file_modification_sema);
       }
     }
   }
@@ -361,7 +372,9 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
       if (thread_current()->fd_array[args[0]] != NULL) 
       {
+        sema_down(&file_modification_sema);
         file_seek (thread_current()->fd_array[args[0]], args[1]);
+        sema_up(&file_modification_sema);
       }
     }
   }

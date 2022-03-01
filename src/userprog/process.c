@@ -108,6 +108,7 @@ start_process (void *file_name_)
   if (!success) 
   {
     executable_list_unsuccess[executable_list_unsuccess_idx] = true;
+    // thread_current ()->parent->exit_status = -1;
     thread_exit ();
   }
     
