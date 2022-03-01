@@ -64,6 +64,7 @@ exit (int status)
         thread_current()->fd_array[i] = NULL;
       }
   }
+  thread_current()->parent->exit_status = status;
   //exit from the thread
   thread_exit ();
 }
@@ -380,6 +381,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   else if (syscall_number == SYS_WAIT) 
   {
     
+    f->eax = process_wait(args[0]);
   }
 
 }

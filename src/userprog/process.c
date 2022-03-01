@@ -55,8 +55,19 @@ process_execute (const char *file_name)
   if (actual_name == NULL) 
     return TID_ERROR;
     
+
+  struct thread *cur_parent = thread_current();
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (actual_name, PRI_DEFAULT, start_process, fn_copy);
+
+  for (int i = 0; i < 128; i++)
+  {
+    if ((cur_parent->child_process_list)[i] == -1) 
+    {
+      (cur_parent->child_process_list)[i] = tid;
+      break;
+    }
+  }
 
   if (thread_current ()->exec_sema.value == 0)
   {
@@ -68,7 +79,7 @@ process_execute (const char *file_name)
     palloc_free_page (fn_copy); 
 
   if (executable_list_unsuccess[executable_list_unsuccess_idx] == true){
-    executable_list_unsuccess[executable_list_unsuccess_idx] == false;
+    executable_list_unsuccess[executable_list_unsuccess_idx] = false;
     executable_list_unsuccess_idx--;
     return TID_ERROR;
   }
@@ -121,16 +132,29 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid UNUSED)
 { 
-  //TODO: use semaphore and fix it
-  // while(1)
-  // {
-  //   thread_yield ();
-  // }
-  // return -1;
-  sema_down(&thread_current()->process_sema);
+  bool found = false;
 
+  for (int i = 0; i < 128; i++)
+  {
+    if (thread_current ()->child_process_list[i] == child_tid)
+    {
+      found = true;
+      thread_current ()->child_process_list[i] = -1;
+      break;
+    }
+  }
+
+  // printf("found = %d", found);
+
+  if (!found)
+  {
+    return -1;
+  }
+  
+  sema_down(&thread_current()->process_sema);
+  return thread_current ()->exit_status;
 }
 
 /* Free the current process's resources. */
@@ -147,6 +171,28 @@ process_exit (void)
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
+
+  tid_t current_pid = cur->tid;
+
+  // printf("current thread name: %s\n", cur->name);
+
+  // for (int i = 0; i < 128; i++) 
+  // {
+  //   if ((cur->parent->child_process_list)[i] == current_pid) 
+  //   {
+  //     (cur->parent->child_process_list)[i] = -1;
+  //     printf("this should be -1: %d", (cur->parent->child_process_list)[i]);
+  //     break;
+  //   }
+  // }
+
+  // print array of child process list
+  // for (int i = 0; i < 128; i++)
+  // {
+  //   printf("%d ", (cur->parent->child_process_list)[i]);
+  // }
+  
+  
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
@@ -160,7 +206,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-    sema_up(&thread_current()->parent->process_sema);
+    sema_up(&cur->parent->process_sema);
 }
 
 /* Sets up the CPU for running user code in the current

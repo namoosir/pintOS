@@ -101,6 +101,8 @@ struct thread
     struct thread *parent;              /* Parent thread. */
     struct file* fd_array[128];         /* Set of file descriptors */
     struct semaphore exec_sema;         /* Semaphore for exec syscall */
+    tid_t child_process_list[128];      /* Array of child processes */
+    int exit_status;                    /* Exit status of the thread */
 #endif
 
     /* Owned by thread.c. */
@@ -111,6 +113,8 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
+
+struct thread* get_thread(tid_t tid);
 
 void thread_init (void);
 void thread_start (void);
