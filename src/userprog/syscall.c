@@ -66,6 +66,7 @@ exit (int status)
       }
   }
   thread_current()->parent->exit_status = status;
+  // file_allow_write(&thread_current()->file);
   //exit from the thread
   thread_exit ();
 }

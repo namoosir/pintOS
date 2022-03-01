@@ -164,7 +164,7 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-  
+  // file_allow_write(executable_list[executable_list_idx]);
   file_close(executable_list[executable_list_idx]);
   executable_list[executable_list_idx] = NULL;
   executable_list_idx--;
@@ -634,6 +634,7 @@ populate_stack (void **esp, const char *file_name)
     uint8_t word_align = 0;
     *esp -= word_align_offset;
     memset(*esp, 0, word_align_offset);
+    
   }
 
   /* Push 4 sentenial bytes */
@@ -663,7 +664,7 @@ populate_stack (void **esp, const char *file_name)
   /* Push the address of the return address onto the stack */
   *esp -= sizeof(int);
   memset(*esp, 0, sizeof(int));
-
+  // free(args);
   // free((char*)args); //TODO: Make free work!!
 }
 
