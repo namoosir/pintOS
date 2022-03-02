@@ -24,9 +24,9 @@ static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
 //Array of executable file pointers
-static struct file* executable_list[128];
+static struct file* executable_list[MAX_CHILDREN];
 static int executable_list_idx = 0;
-static bool executable_list_unsuccess[128];
+static bool executable_list_unsuccess[MAX_CHILDREN];
 static int executable_list_unsuccess_idx = 0;
 
 /* Starts a new thread running a user program loaded from
@@ -48,8 +48,20 @@ process_execute (const char *file_name)
 
   /* Get the name of the userprog */
   char *raw_name = (char *)malloc ((strlen (file_name) + 1) * sizeof (char));
+
+  for (int i = 0; i < 30; i++) 
+  {
+    if (thread_current()->malloced_pointers[i] == NULL)
+    {
+      thread_current()->malloced_pointers[i] = raw_name;
+      break;
+    }
+  }
+
+  // char raw_name[PGSIZE];
   strlcpy (raw_name, file_name, PGSIZE);
   char *actual_name = strtok_r(raw_name, " ", &raw_name);
+  // char *actual_name = strtok_r(file_name, " ", &raw_name);
   // free(raw_name);
 
   if (actual_name == NULL) 
@@ -60,7 +72,7 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (actual_name, PRI_DEFAULT, start_process, fn_copy);
 
-  for (int i = 0; i < 128; i++)
+  for (int i = 0; i < MAX_CHILDREN; i++)
   {
     if ((cur_parent->child_process_list)[i] == -1) 
     {
@@ -74,16 +86,23 @@ process_execute (const char *file_name)
     sema_down(&(thread_current ()->exec_sema));
   }
 
-  
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    palloc_free_page (fn_copy);
 
   if (executable_list_unsuccess[executable_list_unsuccess_idx] == true){
     executable_list_unsuccess[executable_list_unsuccess_idx] = false;
     executable_list_unsuccess_idx--;
+    
+    int i = 0;
+    while (i < 30 && thread_current ()->malloced_pointers[i] != NULL) 
+    {
+      // printf("adfadf %p\n", thread_current()->malloced_pointers[i]);
+      free(thread_current()->malloced_pointers[i]);
+      thread_current()->malloced_pointers[i] = NULL;
+      i++;
+    }
     return TID_ERROR;
   }
-
   return tid;
 }
 
@@ -136,18 +155,17 @@ int
 process_wait (tid_t child_tid UNUSED)
 { 
   bool found = false;
+  int child_process_index = 0;
 
-  for (int i = 0; i < 128; i++)
+  for (int i = 0; i < MAX_CHILDREN; i++)
   {
     if (thread_current ()->child_process_list[i] == child_tid)
     {
       found = true;
-      thread_current ()->child_process_list[i] = -1;
+      child_process_index = i;
       break;
     }
   }
-
-  // printf("found = %d", found);
 
   if (!found)
   {
@@ -155,7 +173,8 @@ process_wait (tid_t child_tid UNUSED)
   }
   
   sema_down(&thread_current()->process_sema);
-  return thread_current ()->exit_status;
+  thread_current ()->child_process_list[child_process_index] = -1;
+  return thread_current ()->exit_status[child_process_index];
 }
 
 /* Free the current process's resources. */
@@ -164,35 +183,19 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-  // file_allow_write(executable_list[executable_list_idx]);
+
+  executable_list_idx--;
+
+  // printf("during closing: name: %s executable pointer %p, index: %d\n", cur->name, executable_list[executable_list_idx], executable_list_idx);
+
   file_close(executable_list[executable_list_idx]);
   executable_list[executable_list_idx] = NULL;
-  executable_list_idx--;
   
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
 
   tid_t current_pid = cur->tid;
-
-  // printf("current thread name: %s\n", cur->name);
-
-  // for (int i = 0; i < 128; i++) 
-  // {
-  //   if ((cur->parent->child_process_list)[i] == current_pid) 
-  //   {
-  //     (cur->parent->child_process_list)[i] = -1;
-  //     printf("this should be -1: %d", (cur->parent->child_process_list)[i]);
-  //     break;
-  //   }
-  // }
-
-  // print array of child process list
-  // for (int i = 0; i < 128; i++)
-  // {
-  //   printf("%d ", (cur->parent->child_process_list)[i]);
-  // }
-  
   
   if (pd != NULL) 
     {
@@ -207,7 +210,26 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+    
+    int i = 0;
+    while (i < 30 && thread_current ()->malloced_pointers[i] != NULL) 
+    {
+      // printf("adfadf %p\n", thread_current()->malloced_pointers[i]);
+      free(thread_current()->malloced_pointers[i]);
+      thread_current()->malloced_pointers[i] = NULL;
+      i++;
+    }
+
     sema_up(&cur->parent->process_sema);
+
+    i = 0;
+    while (i < 30 && thread_current ()->malloced_pointers[i] != NULL) 
+    {
+      // printf("adfadf %p\n", thread_current()->malloced_pointers[i]);
+      free(thread_current()->malloced_pointers[i]);
+      thread_current()->malloced_pointers[i] = NULL;
+      i++;
+    }
 }
 
 /* Sets up the CPU for running user code in the current
@@ -322,6 +344,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   char *raw_name = (char*) malloc ((strlen (file_name) + 1) * sizeof (char));
+
+  for (int i = 0; i < 30; i++) 
+  {
+    if (thread_current()->malloced_pointers[i] == NULL)
+    {
+      thread_current()->malloced_pointers[i] = raw_name;
+      break;
+    }
+  }
+
   strlcpy (raw_name, file_name, PGSIZE);
   char *actual_name = strtok_r(raw_name, " ", &raw_name);
   // free(raw_name);
@@ -353,6 +385,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   executable_list[executable_list_idx] = file;
   executable_list_idx++;
+
+  // printf("name: %s executable pointer %p, index: %d\n", thread_current ()->name, executable_list[executable_list_idx-1], executable_list_idx-1);
+
   executable_list_unsuccess_idx++;
   file_deny_write(file);
 
@@ -570,6 +605,16 @@ populate_stack (void **esp, const char *file_name)
 
   //Iterate over tokens
   char *args = (char *) malloc ((sizeof (char)) * (strlen (file_name) + 1));
+
+  for (int i = 0; i < 30; i++) 
+  {
+    if (thread_current()->malloced_pointers[i] == NULL)
+    {
+      thread_current()->malloced_pointers[i] = args;
+      break;
+    }
+  }
+
   strlcpy(args, file_name, PGSIZE);
   int i = 0;
   // int total_chars = 0;
@@ -584,19 +629,6 @@ populate_stack (void **esp, const char *file_name)
 
     i++;
   }
-
-  // printf("I: %d", i);
-  /* Reverse all the tokens the strings */
-  // for(int j = 0; j < i; j++)
-  // {
-  //   revstr(tokens_array[j]);
-  // }
-  
-  // for(int j = 0; j < i; j++)
-  // {
-  //   printf("Word: %s\n", tokens_array[j]);
-  // }
-
 
   char *address[30];
   /* Push the array items in reverse order onto the stack */
@@ -613,12 +645,6 @@ populate_stack (void **esp, const char *file_name)
     address[j] = (char*) *esp;
   }
 
-
-  // for(int k = 0; k < i; k++)
-  // {
-  //   printf("Address: %p\n", address[k]);
-  // }
-
   int esp_address = abs((int) *esp);
   int word_align_offset = 4 - (esp_address % 4);
   // printf("Offset: %d\n", word_align_offset);
@@ -626,11 +652,6 @@ populate_stack (void **esp, const char *file_name)
   /* word align the stack */
   if(word_align_offset != 0)
   {
-    // printf("ESP: %d\n", esp_address);
-    // printf("MOD: %d\n", esp_address % 4);
-    // printf("IN HERE\n");
-    
-    // printf("Offset: %d\n", word_align_offset);
     uint8_t word_align = 0;
     *esp -= word_align_offset;
     memset(*esp, 0, word_align_offset);

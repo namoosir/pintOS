@@ -8,9 +8,8 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Rakshit Patel <rakshit.patel@mail.utoronto.ca>
+Nazmus Saqeeb <nazmus.saqeeb@mail.utoronto.ca>
 
 ---- PRELIMINARIES ----
 
@@ -30,11 +29,32 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+We didnt add any data structures for setting up the stack.
+
+We added a file_name parameter to the setup_stack method:
+static bool setup_stack (void **esp, const char *file_name)
+This allows to parse the executable file name and the arguments when setting up the stack.
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe how you implemented argument parsing.  How do
 >> you arrange for the elements of argv[] to be in the right order?
 >> How do you avoid overflowing the stack page?
+
+To setup the stack, we initially had the file_name which contains the executable name and the arguments.
+We tokenized this string by the space character and stored the tokens in a new array. We also made sure 
+to trim the spaces from the beginning and end of each token to take care of multiple spaces. All of these 
+tokens are stored in an array called tokens_array. We all store the address of each token in an address array.
+
+Using the tokens array, in reverse order we pushed the arguments onto the stack. This was done by 
+first pushing a \0 to delimit the end of the string and then pushing 1 argument. We repeated this 
+process for each argument.
+
+To align the stack, we used the modulus operator to see if after pushing all the arguments, the stack 
+pointer is a multiple of 4. If it is then we dont need to align it, otherwise, we align it by adding 
+0's to the stack to fill the remaining space. After alignment we push 1 sentential byte to the stack.
+
+Once the arguments section has been pushed onto stack we need to push the address of the arguments
 
 ---- RATIONALE ----
 

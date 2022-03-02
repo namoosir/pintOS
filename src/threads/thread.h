@@ -25,6 +25,8 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+#define MAX_CHILDREN 85             /* Maximum number of children a thread can have */ 
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -101,8 +103,9 @@ struct thread
     struct thread *parent;              /* Parent thread. */
     struct file* fd_array[128];         /* Set of file descriptors */
     struct semaphore exec_sema;         /* Semaphore for exec syscall */
-    tid_t child_process_list[128];      /* Array of child processes */
-    int exit_status;                    /* Exit status of the thread */
+    tid_t child_process_list[MAX_CHILDREN];      /* Array of child processes */
+    int exit_status[MAX_CHILDREN];               /* Exit status of the child threada */
+    char *malloced_pointers[30];       /*A list of pointer we need to free when the thread exits*/
 #endif
 
     /* Owned by thread.c. */

@@ -16,13 +16,15 @@
 
 static void syscall_handler (struct intr_frame *);
 void exit (int status);
+static struct semaphore file_write_sema;
+static struct semaphore file_read_sema;
 static struct semaphore file_modification_sema;
+static bool sema_initialized;
 
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-  sema_init(&file_modification_sema, 1);
 }
 
 /* Reads a byte at user virtual address UADDR.
@@ -65,8 +67,21 @@ exit (int status)
         thread_current()->fd_array[i] = NULL;
       }
   }
-  thread_current()->parent->exit_status = status;
-  // file_allow_write(&thread_current()->file);
+
+  bool found = false;
+  int child_process_index = 0;
+
+  for (int i = 0; i < MAX_CHILDREN; i++)
+  {
+    if (thread_current ()->parent->child_process_list[i] == thread_current()->tid)
+    {
+      found = true;
+      child_process_index = i;
+      break;
+    }
+  }
+  thread_current()->parent->exit_status[child_process_index] = status;
+
   //exit from the thread
   thread_exit ();
 }
@@ -105,6 +120,14 @@ syscall_handler (struct intr_frame *f UNUSED)
 {
   unsigned syscall_number;
   int args[3];
+
+  if(!sema_initialized){
+    sema_init(&file_read_sema, 1);
+    sema_init(&file_write_sema, 1);
+    sema_init(&file_modification_sema, 1);
+    sema_initialized = true;
+    // printf("here\n");
+  }
   
   // printf("first\n");
 
@@ -118,10 +141,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   {
     exit(-1);
   }
-
   // printf("third\n");
-
-
   //extract the 3 arguments
   copy_in (args, (uint32_t *) f->esp + 1, sizeof *args * 3);
 
@@ -152,8 +172,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
       int size = args[2];
       char* buffer = (char *)args[1];
-      //Prevent other tasks when writing
-      sema_down(&file_modification_sema);
+
       //stdout
       if(args[0] == 1)
       {
@@ -189,28 +208,26 @@ syscall_handler (struct intr_frame *f UNUSED)
       }
       else if (thread_current()->fd_array[args[0]] != NULL) 
       {
-        
+        //Prevent other tasks when writing
+        sema_down(&file_write_sema);
+
         //write to some other file
         int read_bytes = file_write (thread_current()->fd_array[args[0]], buffer, size);
         f->eax = read_bytes;
+        
+        sema_up(&file_write_sema);
       }
       else
       {
-        sema_up(&file_modification_sema);
-
         f->eax = -1;
         exit(-1);
       }
     } 
     else
     {
-      sema_up(&file_modification_sema);
-
       f->eax = -1;
       exit(-1);
     }
-
-    sema_up(&file_modification_sema);
   }
   else if (syscall_number == SYS_CREATE)
   {
@@ -300,8 +317,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
       exit(-1);
     }
-    //Prevent other tasks when reading
-    sema_down(&file_modification_sema);
+
     // printf("HERE\n");
     if (args[0] != 1 && args[0] < 128 && args[0] > 0) 
     {
@@ -321,27 +337,30 @@ syscall_handler (struct intr_frame *f UNUSED)
       }
       else if (thread_current()->fd_array[args[0]] != NULL) 
       {
+        //Prevent other tasks when reading
+        // printf("SEMA DOWN %s\n", thread_current()->name);
+        sema_down(&file_read_sema);
+        // printf("entering critical section %s\n", thread_current()->name);
 
         //some other file
         int read_bytes = file_read (thread_current()->fd_array[args[0]], buffer, size);
         f->eax = read_bytes;
+
+        // printf("exiting critical section %s\n", thread_current()->name);
+        sema_up(&file_read_sema);
+        // printf("SEMA UP %s\n", thread_current()->name);
       }
       else
       {
-        
-        sema_up(&file_modification_sema);
         f->eax = -1;
         exit(-1);
       }
     }
     else
     {
-      
-      sema_up(&file_modification_sema);
       f->eax = -1;
       exit(-1);
     }
-    sema_up(&file_modification_sema);
   }
   else if (syscall_number == SYS_FILESIZE)
   {
@@ -397,5 +416,5 @@ syscall_handler (struct intr_frame *f UNUSED)
     
     f->eax = process_wait(args[0]);
   }
-
+  // free(args);
 }

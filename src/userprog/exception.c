@@ -152,7 +152,6 @@ page_fault (struct intr_frame *f)
   if(!user){
      exit(-1);
   }
-
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
