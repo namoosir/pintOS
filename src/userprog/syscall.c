@@ -11,15 +11,16 @@
 #include "devices/input.h"
 #include "process.h"
 
-#define LOWEST_ADDR ((void *) 0x08048000)
-#define LARGE_WRITE_CHUNK 100
+#define LOWEST_ADDR ((void *) 0x08048000) /* lowest address of stack */
+#define LARGE_WRITE_CHUNK 100  /* max number of bytes to write to stdout at once */
 
 static void syscall_handler (struct intr_frame *);
 void exit (int status);
-static struct semaphore file_write_sema;
-static struct semaphore file_read_sema;
-static struct semaphore file_modification_sema;
-static bool sema_initialized;
+static struct semaphore file_write_sema; /* semaphore for file write */
+static struct semaphore file_read_sema; /* semaphore for file read */
+static struct semaphore file_modification_sema; /* semaphore for other file operations */
+static bool sema_initialized; /*A flag to initialize semaphores only once */
+
 
 void
 syscall_init (void) 
@@ -52,14 +53,19 @@ put_user (uint8_t *udst, uint8_t byte)
   return error_code != -1;
 }
 
-/* Exit from the thread with status code status*/
+/* 
+  Exit from the process and close all files that the process has open
+  and free all memory allocated by the process.
+
+  Saves the exit status in its parent process.
+*/
 void
 exit (int status)
 {
   printf("%s: exit(%d)\n", thread_current()->name, status);
   
   //close any open file descriptors
-  for (int i = 2; i < 128; i++)
+  for (int i = 2; i < MAX_FILE_DESCRIPTORS; i++)
   {
       if (thread_current()->fd_array[i] != NULL) 
       {
@@ -68,14 +74,12 @@ exit (int status)
       }
   }
 
-  bool found = false;
   int child_process_index = 0;
 
   for (int i = 0; i < MAX_CHILDREN; i++)
   {
     if (thread_current ()->parent->child_process_list[i] == thread_current()->tid)
     {
-      found = true;
       child_process_index = i;
       break;
     }
@@ -86,6 +90,10 @@ exit (int status)
   thread_exit ();
 }
 
+/* 
+  Copies size bytes from *usrc_ to *dst_ making sure
+  *usrc_ is part of user memory.
+*/
 static void
 copy_in (void *dst_, const void *usrc_, size_t size)
 {
@@ -101,7 +109,7 @@ copy_in (void *dst_, const void *usrc_, size_t size)
   }
 }
 
-
+/* Return true if arg is a bad pointer and false otherwise */
 static bool
 bad_ptr_arg(int arg)
 {
@@ -114,7 +122,10 @@ bad_ptr_arg(int arg)
   return false;
 }
 
-
+/* 
+  Handler for the different syscalls. Parses user input and then executes the correct 
+  syscall.
+*/
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
@@ -126,28 +137,20 @@ syscall_handler (struct intr_frame *f UNUSED)
     sema_init(&file_write_sema, 1);
     sema_init(&file_modification_sema, 1);
     sema_initialized = true;
-    // printf("here\n");
   }
   
-  // printf("first\n");
-
   //extract the syscall number
   copy_in (&syscall_number, f->esp, sizeof syscall_number);
-
-  // printf("second\n");
 
   //check if the entire address of the syscall is in the stack
   if ((uint32_t) pg_round_up (f->esp) - (uint32_t) f->esp < sizeof(int)) 
   {
     exit(-1);
   }
-  // printf("third\n");
+
   //extract the 3 arguments
   copy_in (args, (uint32_t *) f->esp + 1, sizeof *args * 3);
 
-  // printf("fourth\n");
-
-  // printf("sycall number %d\n", syscall_number);
   if(syscall_number == SYS_HALT)
   {
     //shut down the system
@@ -167,8 +170,8 @@ syscall_handler (struct intr_frame *f UNUSED)
       exit(-1);
     }
 
-    
-    if (args[0] != 0 && args[0] < 128 && args[0] > 0) 
+    //Check if the file descriptor is valid
+    if (args[0] != 0 && args[0] < MAX_FILE_DESCRIPTORS && args[0] > 0) 
     {
       int size = args[2];
       char* buffer = (char *)args[1];
@@ -263,10 +266,6 @@ syscall_handler (struct intr_frame *f UNUSED)
     f->eax = success;
     sema_up(&file_modification_sema);
   }
-  
-  //TODO: complete this
-  //Hashmap saves space
-  //Array[128] idx is fd, content is pointer to file
   else if (syscall_number == SYS_OPEN)
   {
     if (bad_ptr_arg(args[0]))
@@ -283,8 +282,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     else
     {
       int i;
-
-      for (i = 2; i < 128; i++) 
+      for (i = 2; i < MAX_FILE_DESCRIPTORS; i++) 
       {
         //Find first empty slot for fd
         if (thread_current ()->fd_array[i] == NULL)
@@ -299,7 +297,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if(syscall_number == SYS_CLOSE)
   {
-    if (args[0] != 0 && args[0] != 1 && args[0] < 128 && args[0] > 0)
+    if (args[0] != 0 && args[0] != 1 && args[0] < MAX_FILE_DESCRIPTORS && args[0] > 0)
     {
       if (thread_current()->fd_array[args[0]] != NULL) 
       {
@@ -319,7 +317,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
 
     // printf("HERE\n");
-    if (args[0] != 1 && args[0] < 128 && args[0] > 0) 
+    if (args[0] != 1 && args[0] < MAX_FILE_DESCRIPTORS && args[0] > 0) 
     {
       int size = args[2];
       char* buffer = (char *)args[1];
@@ -364,7 +362,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if (syscall_number == SYS_FILESIZE)
   {
-    if (args[0] != 0 && args[0] != 1 && args[0] < 128 && args[0] > 0) 
+    if (args[0] != 0 && args[0] != 1 && args[0] < MAX_FILE_DESCRIPTORS && args[0] > 0) 
     {
       if (thread_current()->fd_array[args[0]] != NULL) 
       {
@@ -376,7 +374,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if (syscall_number == SYS_TELL) 
   {
-    if (args[0] != 0 && args[0] != 1 && args[0] < 128 && args[0] > 0) 
+    if (args[0] != 0 && args[0] != 1 && args[0] < MAX_FILE_DESCRIPTORS && args[0] > 0) 
     {
       if (thread_current()->fd_array[args[0]] != NULL) 
       {
@@ -388,7 +386,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if (syscall_number == SYS_SEEK)
   {
-    if (args[0] != 0 && args[0] != 1 && args[0] < 128 && args[0] > 0) 
+    if (args[0] != 0 && args[0] != 1 && args[0] < MAX_FILE_DESCRIPTORS && args[0] > 0) 
     {
       if (thread_current()->fd_array[args[0]] != NULL) 
       {

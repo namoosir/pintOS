@@ -25,7 +25,8 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
-#define MAX_CHILDREN 85             /* Maximum number of children a thread can have */ 
+#define MAX_CHILDREN 85             /* Maximum number of children a thread can have */
+#define MAX_FILE_DESCRIPTORS 128     /* Maximum number of file descriptors a thread can have */
 
 /* A kernel thread or user process.
 
@@ -101,7 +102,7 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     struct semaphore process_sema;      /* Semaphore for processes. */
     struct thread *parent;              /* Parent thread. */
-    struct file* fd_array[128];         /* Set of file descriptors */
+    struct file* fd_array[MAX_FILE_DESCRIPTORS];         /* Set of file descriptors */
     struct semaphore exec_sema;         /* Semaphore for exec syscall */
     tid_t child_process_list[MAX_CHILDREN];      /* Array of child processes */
     int exit_status[MAX_CHILDREN];               /* Exit status of the child threada */

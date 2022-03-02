@@ -8,5 +8,5 @@ int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
 void populate_stack (void **esp, const char *file_name);
-
+char *trimString(char *str);
 #endif /* userprog/process.h */

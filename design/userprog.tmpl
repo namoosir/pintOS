@@ -60,9 +60,26 @@ Once the arguments section has been pushed onto stack we need to push the addres
 
 >> A3: Why does Pintos implement strtok_r() but not strtok()?
 
+This is because strtok_r() is reentrant, which means that multiple
+threads can call the function at the same time without bugs. This is 
+mainly because strtok() uses a static variable to store the location 
+of the string, which would cause issues if another thread called it 
+before it was finished.
+
 >> A4: In Pintos, the kernel separates commands into a executable name
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
+
+Advantage 1:
+Unix-like systems can have a more lightweight kernel without all the parsing
+and error-checking built into it since the shell can take care of it. 
+This could mean that a Unix-like kernel runs faster than Pintos.
+
+Advantage 2:
+Since there are extensive error messages in the shell (for bad arguments, 
+or commands that do not exist), this could result in more verbose output for the 
+user to work with and figure out the problem. However in Pintos this is not the 
+case as there are no program specific errors.
 
                  SYSTEM CALLS
                  ============
@@ -73,14 +90,54 @@ Once the arguments section has been pushed onto stack we need to push the addres
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+
+In syscall.c:
+    static struct semaphore file_write_sema; /* semaphore for file write */
+    static struct semaphore file_read_sema; /* semaphore for file read */
+    static struct semaphore file_modification_sema; /* semaphore for other file operations */
+    static bool sema_initialized; /*A flag to initialize semaphores only once */
+
+In process.c:
+    static struct file* executable_list[MAX_CHILDREN]; /* List of all the executables currently running */
+    static int executable_list_idx = 0;                /* Index of the most recent executable launched */
+    static bool executable_list_unsuccess[MAX_CHILDREN]; /* List of executables that were not able to run */
+    static int executable_list_unsuccess_idx = 0; /* Keeps track of the most recent executable that was unsuccesful */
+
+In thread.h:
+    struct semaphore process_sema;      /* Semaphore for processes. */
+    struct thread *parent;              /* Pointer to parent thread. */
+    struct file* fd_array[128];         /* Set of file descriptors */
+    struct semaphore exec_sema;         /* Semaphore for exec syscall */
+    tid_t child_process_list[MAX_CHILDREN];      /* Array of child processes */
+    int exit_status[MAX_CHILDREN];               /* Exit status of the child threada */
+    char *malloced_pointers[30];       /*A list of pointer we need to free when the thread exits*/
+
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
+
+Open files are assigned a file descriptor to identify them. They are not 
+unique within the entire OS, only within a single process. This is because 
+multiple processes can open and read the same file, however only one process can
+write to any file at one time.
 
 ---- ALGORITHMS ----
 
 >> B3: Describe your code for reading and writing user data from the
 >> kernel.
+
+The code for writing works by checking if we have a vaild pointer to the 
+user data. After that, we check if we are writing to stdout or some other 
+file. If we write to stdout, then the writes will be done in chuncks of 100 bytes.
+If we are writing to some other file, then the file_write() function will write 
+every byte in the buffer at once.
+
+The code for reading works by checking if we have a vaild pointer to the 
+user data. After that, we check if we are reading from stdin or some other 
+file. If we are reading from stdin, then the input_getc() function will read 
+from the input buffer and save it to the read buffer. If we are reading from 
+some other file then, the file_read() function will read all "size" number of 
+bytes to the read buffer. 
 
 >> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least
@@ -89,8 +146,28 @@ Once the arguments section has been pushed onto stack we need to push the addres
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
+In both cases, we only call pagedir_get_page() after we have copied in all
+the arguments, and since there are at most 3 arguments, we could call this function
+1 to 3 times depending on how many arguments the syscall takes. We can improve this
+by calling pagedir_get_page() once on the head of the pointer which stores all 
+3 arguments. In that case we would not need to call it any more than once.
+
+
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
+
+The parent process that called wait() has access to a list of child pid's.
+If the child process that we are calling wait on is in that parent's 
+child list, then we will block the parent process using a semaphore. 
+Once a child process exits, we will unblock the parent process and 
+save the child's exit status in an array that the parent holds. 
+Once wait is called on a process, we check whether the process
+has terminated and return the exit code if it has, otherwise we
+wait for termination and then return its exit code.
+If the child is not in the parent's child list then we will return -1
+since this means that the parent did not call exec on the given process.
+If the child is killed before exiting, then we will exit with code -1 from 
+the execption handler.
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
@@ -106,12 +183,45 @@ Once the arguments section has been pushed onto stack we need to push the addres
 >> paragraphs, describe the strategy or strategies you adopted for
 >> managing these issues.  Give an example.
 
+Firstly we make sure the arguments that we receive are valid in a 
+variety of different checks, since we pop these arguments from the
+stack for every syscall, we only perform this check once at the very
+beginning. We also do syscall specific error checking at each syscall
+to ensure we have valid input to begin with. In order to check that the 
+arguments are vaild, we verify a that the pointer to those arguments 
+meet certain conditions: 
+1) The pointer is not NULL
+2) The pointer is in user memory
+3) The pointer is not below the lowest address of the stack (0x08048000)
+
+
+Our main strategy to handle any other errors is to create an exit function
+which we call if anything goes wrong. This function always frees any
+memory that we allocated and closes any file descriptors and then returns
+the exit status to its parent if applicable. Due to the vast number of 
+possible ways that errors can happen, we use this function extensively
+to avoid repetition of code and to avoid obscuring the primary function
+of our code.
+
+In case any bad input errors are not caught within the syscall, we will 
+exit from the execption handler to gracefully exit the process.
+
 ---- SYNCHRONIZATION ----
 
 >> B7: The "exec" system call returns -1 if loading the new executable
 >> fails, so it cannot return before the new executable has completed
 >> loading.  How does your code ensure this?  How is the load
 >> success/failure status passed back to the thread that calls "exec"?
+
+We use a semaphore initialized with a value of 0 to block the parent
+process right as it spawns the child process until the child process 
+finishes loading. We also store in a data structure (executable_list_unsuccess) 
+whether the a given process failed or succeeded. In any case, after we update 
+the data structure, we unblock the parent process by doing a sema up on the 
+semaphore. When the parent process begins to run again, we check our data 
+structure to see if the child was successfull or not. If not, then we 
+return -1 and otherwise we return the pid of the child process back to 
+the exec syscall.
 
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P
@@ -120,16 +230,65 @@ Once the arguments section has been pushed onto stack we need to push the addres
 >> terminates without waiting, before C exits?  After C exits?  Are
 >> there any special cases?
 
+How do you ensure proper synchronization and avoid race conditions when P
+calls wait(C) before C exits?
+
+We immediately block P with a semaphore and let C finish running. Once C 
+terminates, then we up the semaphore, unblocking P.
+
+After C exits?
+
+P stores a list of child processes and their exit codes,
+which we store when a child process exits. If we find that C 
+already has a corresponding exit code, then it means that 
+C already exited before P called wait on it, so we just return 
+that exit code.
+
+How do you ensure that all resources are freed in each case?
+
+In both cases, we eventually call our exit function on C. 
+In this function that we already mentioned above, we free
+all resources.
+
+How about when P terminates without waiting, before C exits? After C exits?
+
+In both of these cases, we block P as it calls wait using a semaphore.
+This effectively does not allow P to continue running thus it does not let
+it terminate unless there is some fatal error and the entire kernel shuts down.
+
+Are there any special cases?
+
+A special case arises when a process other than P calls wait on C.
+To handle this, we always check if the process that called wait has 
+C as a child in its child_process_list. If it doesn't, then we return -1.
+
 ---- RATIONALE ----
 
 >> B9: Why did you choose to implement access to user memory from the
 >> kernel in the way that you did?
 
+We chose the method that we did because it was safe, with lots of 
+errorchecking to make sure that we did not cause any unexpected
+behavior and that we were actually accessing user memory. We also made 
+sure to always check that the pagedir of the process is mapped and 
+if the stack pointer is pointing to a valid address on the stack using 
+the checks described in B6.
+
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
 
+A big advantage to the way we implemented file descriptors are that it
+is very fast since we use an array as a hashmap with the index as the
+key and the value as the file. Since there are no dynamic memory allocations
+this also adds to its speed. The drawback is that we are always creating and
+array of fixed size so we must enforce a max number of file descriptors available,
+and it may be a waste of memory to always create an array with the maximum size.
+
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
+
+We did not change the mapping. This allows us to easily distinguish 
+between the parent and child processes.
 
                SURVEY QUESTIONS
                ================
