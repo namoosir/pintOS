@@ -37,6 +37,7 @@
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
 #endif
+#include "vm/frame.h"
 
 /* Page directory with kernel mappings only. */
 uint32_t *init_page_dir;
@@ -128,7 +129,7 @@ main (void)
 #endif
 
   printf ("Boot complete.\n");
-  
+  frame_table_init();
   /* Run actions specified on kernel command line. */
   run_actions (argv);
 

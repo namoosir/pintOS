@@ -5,6 +5,8 @@
 #include <list.h>
 #include <stdint.h>
 #include <threads/synch.h>
+#include <lib/kernel/hash.h>
+#include <vm/page.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -108,7 +110,7 @@ struct thread
     int exit_status[MAX_CHILDREN];               /* Exit status of the child threada */
     char *malloced_pointers[30];       /*A list of pointer we need to free when the thread exits*/
 #endif
-
+    struct hash supplemental_page_hash_table;
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
