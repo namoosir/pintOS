@@ -215,11 +215,8 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
-
-
-  hash_hash_func* h = hash_bytes;
-  hash_less_func* l = page_table_hash_comparator;
-  hash_init(&thread_current()->supplemental_page_hash_table, h, l, NULL);
+  
+  hash_init(&(t->supplemental_page_hash_table), page_hash, page_table_hash_comparator, NULL);
 
   /* Add to run queue. */
   thread_unblock (t);

@@ -9,4 +9,5 @@ void process_exit (void);
 void process_activate (void);
 void populate_stack (void **esp, const char *file_name);
 char *trimString(char *str);
+bool install_page (void *upage, void *kpage, bool writable);
 #endif /* userprog/process.h */

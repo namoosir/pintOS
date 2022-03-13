@@ -5,6 +5,10 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "userprog/syscall.h"
+#include "vm/page.h"
+#include "vm/frame.h"
+#include "threads/palloc.h"
+#include "userprog/process.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -148,9 +152,21 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
-
-  if(!user){
+  
+  if(!user)
+  {
      exit(-1);
+  } 
+  else 
+  {
+     struct supplemental_page_entry *p = page_lookup(fault_addr);
+     
+     if (p == NULL) exit(-1);
+     if (write == 1 && not_present == 0) exit(-1);
+     uint8_t* kpage = frame_add(PAL_USER | PAL_ZERO, p->user_virtual_address, p->writable);
+     
+     if (!install_page(p->user_virtual_address, kpage, p->writable)) exit(-1);
+     return;
   }
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to

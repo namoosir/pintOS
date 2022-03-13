@@ -414,5 +414,13 @@ syscall_handler (struct intr_frame *f UNUSED)
     
     f->eax = process_wait(args[0]);
   }
+  else if (syscall_number == SYS_MMAP)
+  {
+
+  }
+  else if (syscall_number == SYS_MUNMAP)
+  {
+    
+  }
   // free(args);
 }
