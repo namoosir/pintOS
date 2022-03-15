@@ -7,15 +7,20 @@
 // List of all frames
 struct list frame_table;
 
+enum create_sup_page_entry{
+    CREATE_SUP_PAGE_ENTRY,
+    DONT_CREATE_SUP_PAGE_ENTRY,
+};
+
 //Single frame table entry
 struct single_frame_entry 
 {
     uint32_t *frame_address;
     struct thread *holder;
-    struct single_page_entry *page;
+    struct supplemental_page_entry *page;
     struct list_elem frame_elem;
 };
 
 void frame_table_init(void);
-void* frame_add(enum palloc_flags flags, uint8_t *user_virtual_address, bool writable);
+struct single_frame_entry* frame_add(enum palloc_flags flags, uint8_t *user_virtual_address, bool writable, enum create_sup_page_entry);
 #endif /* vm/frame.h */

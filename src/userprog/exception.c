@@ -152,20 +152,60 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
-  
+
+  //If userprog needs more than 1 page
+
+  //1. Data has 
+  //check if data has been swapped out, then we need to swap it in
+  //if it has not been swapped out, and its from the filesystem then we need to read it back
+  //if not, swap out data then grow stack
+  char* esp = f->esp;
   if(!user)
   {
      exit(-1);
-  } 
+  }
   else 
   {
      struct supplemental_page_entry *p = page_lookup(fault_addr);
-     
-     if (p == NULL) exit(-1);
+     //grow stack
+     if (p == NULL){
+
+         // TODO:: If not in page table then check for bad address
+         if ((fault_addr > (void *)(esp+32)) || (fault_addr < (void *)(esp-32))) {
+            exit(-1);
+         }
+         //Create a new frame for a page to grow the stack
+         struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, fault_addr, true, CREATE_SUP_PAGE_ENTRY);
+         
+         //Install the page
+         if (!install_page(frame->page->user_virtual_address, frame->frame_address, frame->page->writable)) exit(-1);
+        
+     }  
+
+     if (p->page_flag == FROM_FILE_SYSTEM){
+      //Create frame entry without creating a supplemental page entry
+      struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, p->user_virtual_address, p->writable, DONT_CREATE_SUP_PAGE_ENTRY);
+      uint8_t *kpage = frame->frame_address;
+      frame->page = p;
+
+      //Read from file
+      if (file_read_at (p->pg_data.file, kpage, p->pg_data.read_bytes, p->pg_data.ofs) != (int) p->pg_data.read_bytes) {
+        exit(-1);
+      }
+      memset (kpage + p->pg_data.read_bytes, 0, 4096 - p->pg_data.read_bytes);
+      
+      //Install a new page
+      if (!install_page(p->user_virtual_address, kpage, p->writable)) exit(-1);
+      p->page_flag = FROM_FRAME_TABLE;
+      // p->frame = frame;
+     }
      if (write == 1 && not_present == 0) exit(-1);
-     uint8_t* kpage = frame_add(PAL_USER | PAL_ZERO, p->user_virtual_address, p->writable);
+   // Filsystem, if mem mapped file then we write data back to file
+   // If the data is not swapped out then we write it back to the file
+   // Swap Table -> need to swap back in
+   //   uint8_t* kpage = frame_add(PAL_USER | PAL_ZERO, p->user_virtual_address, p->writable);
      
-     if (!install_page(p->user_virtual_address, kpage, p->writable)) exit(-1);
+     
      return;
   }
   /* To implement virtual memory, delete the rest of the function

@@ -39,21 +39,37 @@ page_lookup (void *address)
 }
 
 struct supplemental_page_entry* 
-new_supplemental_page_entry(uint8_t* user_virtual_address, bool writable) 
+new_supplemental_page_entry(int page_flag, uint8_t* user_virtual_address, bool writable, struct page_data pg_data) 
 {
-    struct supplemental_page_entry *s = (struct supplemental_page_entry*)malloc(sizeof(struct supplemental_page_entry));
-    s->user_virtual_address = user_virtual_address;
-    s->time_accessed = timer_ticks();
-    s->dirty = pagedir_is_dirty(thread_current()->pagedir, user_virtual_address);
-    s->accessed = pagedir_is_accessed(thread_current()->pagedir, user_virtual_address);
-    s->writable = writable;
+  struct supplemental_page_entry *s = (struct supplemental_page_entry*)malloc(sizeof(struct supplemental_page_entry));
+  if(s == NULL){
+    return NULL;
+  }
+  
+  s->user_virtual_address = user_virtual_address;
+  s->time_accessed = timer_ticks();
+  s->dirty = pagedir_is_dirty(thread_current()->pagedir, user_virtual_address);
+  s->accessed = pagedir_is_accessed(thread_current()->pagedir, user_virtual_address);
+  s->writable = writable;
+  s->page_flag = page_flag;
+  s->pg_data = pg_data;
 
-    struct thread *curr = thread_current();
-    if (NULL != hash_insert(&(curr->supplemental_page_hash_table), &s->supplemental_page_elem)) 
-    {
-        hash_replace(&(curr->supplemental_page_hash_table), &s->supplemental_page_elem);
-    }
-    return s;
+  struct thread *curr = thread_current();
+  if (NULL != hash_insert(&(curr->supplemental_page_hash_table), &s->supplemental_page_elem)) 
+  {
+      hash_replace(&(curr->supplemental_page_hash_table), &s->supplemental_page_elem);
+  }
+  return s;
+}
+
+struct page_data
+save_page_data(struct file *file, int32_t ofs, uint32_t read_bytes)
+{
+  struct page_data p;
+  p.file = file;
+  p.ofs = ofs;
+  p.read_bytes = read_bytes;
+  return p;
 }
 
 
