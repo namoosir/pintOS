@@ -163,13 +163,15 @@ page_fault (struct intr_frame *f)
   //if it has not been swapped out, and its from the filesystem then we need to read it back
   //if not, swap out data then grow stack
   char* esp = f->esp;
-  if(!user)
-  {
-   //   printf("here!\n");
-     exit(-1);
-  }
-  else 
-  {   
+//   if(!user)
+//   {
+//    //   struct supplemental_page_entry *p = page_lookup(pg_round_down(fault_addr));
+//    //   printf("%d\n", p->page_flag);
+//    //   printf("here!\n");
+//      exit(-1);
+//   }
+//   else 
+//   {   
      struct supplemental_page_entry *p = page_lookup(pg_round_down(fault_addr));
    //   for(int i = 0; i <= 32; i++)
    //   {
@@ -178,19 +180,49 @@ page_fault (struct intr_frame *f)
    //         break;
    //      }
    //   }
-     
+     (int)0xc010af14;
+     (unsigned int)0x8050000;
+
+     (int)0xc003e7e4;
+     (unsigned int)0x8050000;
+
+     (int)0xc010fed4;
+     (unsigned int)0x20101234;
+
+     (int)0xbfffff80;
+     (unsigned int)0;
+
+     (int)0xbfffff6c;
+     0;
+
+     (int)0xbfffe000;
+     (unsigned int)0x1c;
+
+      0xbfffff98;
+      0xbfffef98; //both are uints here??
+
+      (int)0xbffef000;
+      (unsigned int)0x1c; //this should be passing
+
+
+
      //grow stack
      if (p == NULL){
       //   printf("here2!\n");
 
          // TODO:: If not in page table then check for bad address
          if ((fault_addr < (void *)(esp-32))) {
+            // printf("esp: %p, fault addr: %p\n", (void*)esp, fault_addr);
             // printf("here3!\n");
             exit(-1);
          }
+
          // printf("here4\n");
          //Create a new frame for a page to grow the stack
          struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, pg_round_down(fault_addr), true, CREATE_SUP_PAGE_ENTRY);
+         
+         //make sure address is not in kernel space
+         if (is_kernel_vaddr(pg_round_down(frame->page->user_virtual_address))) exit(-1);
          
          //Install the page
          if (!install_page(pg_round_down(frame->page->user_virtual_address), frame->frame_address, frame->page->writable)) exit(-1);
@@ -209,7 +241,7 @@ page_fault (struct intr_frame *f)
         exit(-1);
       }
       memset (kpage + p->pg_data.read_bytes, 0, 4096 - p->pg_data.read_bytes);
-      
+            
       //Install a new page
       if (!install_page(pg_round_down(p->user_virtual_address), kpage, p->writable)) exit(-1);
       p->page_flag = FROM_FRAME_TABLE;
@@ -224,7 +256,7 @@ page_fault (struct intr_frame *f)
      
      
      return;
-  }
+//   }
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
