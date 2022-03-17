@@ -15,7 +15,7 @@ enum create_sup_page_entry{
 //Single frame table entry
 struct single_frame_entry 
 {
-    uint32_t *frame_address;
+    uint8_t *frame_address;
     struct thread *holder;
     struct supplemental_page_entry *page;
     struct list_elem frame_elem;

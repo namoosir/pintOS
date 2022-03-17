@@ -532,9 +532,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      struct page_data pg_data = save_page_data(file, ofs, read_bytes);
+      
+      struct page_data pg_data = save_page_data(file, ofs, page_read_bytes);
+      
      
-      struct supplemental_page_entry *s = new_supplemental_page_entry(FROM_FILE_SYSTEM, upage, writable, pg_data);
+      struct supplemental_page_entry *s = new_supplemental_page_entry(FROM_FILE_SYSTEM, pg_round_down(upage), writable, pg_data);
       if (s == NULL){
         return false;
       }
@@ -684,11 +686,11 @@ setup_stack (void **esp, const char *file_name)
   uint8_t *kpage;
   bool success = false;
   
-  kpage = frame_add(PAL_USER | PAL_ZERO, ((uint8_t *) PHYS_BASE) - PGSIZE, true, CREATE_SUP_PAGE_ENTRY);
+  struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, ((uint8_t *) PHYS_BASE) - PGSIZE, true, CREATE_SUP_PAGE_ENTRY);
   // kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
+  if (frame->frame_address != NULL) 
     {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, frame->frame_address, true);
       if (success) 
       {
         *esp = PHYS_BASE;

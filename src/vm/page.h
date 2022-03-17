@@ -15,7 +15,7 @@ struct page_data
 {
     struct file *file;
     int32_t ofs;
-    uint32_t read_bytes;
+    size_t read_bytes;
 };
 //create page table data structure
 struct supplemental_page_entry 

@@ -4,6 +4,7 @@
 #include "threads/thread.h"
 #include "userprog/pagedir.h"
 #include "devices/timer.h"
+#include "threads/vaddr.h"
 
 bool
 page_table_hash_comparator(const struct hash_elem *a, const struct hash_elem *b, void* aux UNUSED) 

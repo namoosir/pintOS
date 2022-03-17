@@ -9,6 +9,9 @@
 #include "vm/frame.h"
 #include "threads/palloc.h"
 #include "userprog/process.h"
+#include "filesys/file.h"
+#include "threads/vaddr.h"
+#include "lib/string.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -162,31 +165,44 @@ page_fault (struct intr_frame *f)
   char* esp = f->esp;
   if(!user)
   {
+     printf("here!\n");
      exit(-1);
   }
   else 
-  {
-     struct supplemental_page_entry *p = page_lookup(fault_addr);
+  {   
+     struct supplemental_page_entry *p = page_lookup(pg_round_down(fault_addr));
+   //   for(int i = 0; i <= 32; i++)
+   //   {
+   //      struct supplemental_page_entry *p = page_lookup(fault_addr+i);
+   //      if(p != NULL){
+   //         break;
+   //      }
+   //   }
+     
      //grow stack
      if (p == NULL){
+        printf("here2!\n");
 
          // TODO:: If not in page table then check for bad address
-         if ((fault_addr > (void *)(esp+32)) || (fault_addr < (void *)(esp-32))) {
+         if ((fault_addr < (void *)(esp-32))) {
+            printf("here3!\n");
             exit(-1);
          }
+         printf("here4\n");
          //Create a new frame for a page to grow the stack
-         struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, fault_addr, true, CREATE_SUP_PAGE_ENTRY);
+         struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, pg_round_down(fault_addr), true, CREATE_SUP_PAGE_ENTRY);
          
          //Install the page
-         if (!install_page(frame->page->user_virtual_address, frame->frame_address, frame->page->writable)) exit(-1);
-        
+         if (!install_page(pg_round_down(frame->page->user_virtual_address), frame->frame_address, frame->page->writable)) exit(-1);
      }  
 
      if (p->page_flag == FROM_FILE_SYSTEM){
+        printf("here5\n");
       //Create frame entry without creating a supplemental page entry
-      struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, p->user_virtual_address, p->writable, DONT_CREATE_SUP_PAGE_ENTRY);
+      struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, pg_round_down(p->user_virtual_address), p->writable, DONT_CREATE_SUP_PAGE_ENTRY);
       uint8_t *kpage = frame->frame_address;
       frame->page = p;
+
 
       //Read from file
       if (file_read_at (p->pg_data.file, kpage, p->pg_data.read_bytes, p->pg_data.ofs) != (int) p->pg_data.read_bytes) {
@@ -195,9 +211,10 @@ page_fault (struct intr_frame *f)
       memset (kpage + p->pg_data.read_bytes, 0, 4096 - p->pg_data.read_bytes);
       
       //Install a new page
-      if (!install_page(p->user_virtual_address, kpage, p->writable)) exit(-1);
+      if (!install_page(pg_round_down(p->user_virtual_address), kpage, p->writable)) exit(-1);
       p->page_flag = FROM_FRAME_TABLE;
       // p->frame = frame;
+      return;
      }
      if (write == 1 && not_present == 0) exit(-1);
    // Filsystem, if mem mapped file then we write data back to file

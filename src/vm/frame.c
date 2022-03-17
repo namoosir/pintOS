@@ -15,7 +15,7 @@ struct single_frame_entry*
 frame_add(enum palloc_flags flags, uint8_t *user_virtual_address, bool writable, enum create_sup_page_entry should_create_sup_page_entry) 
 {
     struct single_frame_entry *frame = (struct single_frame_entry*) malloc(sizeof(struct single_frame_entry));
-    uint32_t *page_addr = palloc_get_page (flags);
+    uint8_t *page_addr = palloc_get_page (flags);
 
     ASSERT(page_addr != NULL);
     
