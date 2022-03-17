@@ -165,7 +165,7 @@ page_fault (struct intr_frame *f)
   char* esp = f->esp;
   if(!user)
   {
-     printf("here!\n");
+   //   printf("here!\n");
      exit(-1);
   }
   else 
@@ -181,14 +181,14 @@ page_fault (struct intr_frame *f)
      
      //grow stack
      if (p == NULL){
-        printf("here2!\n");
+      //   printf("here2!\n");
 
          // TODO:: If not in page table then check for bad address
          if ((fault_addr < (void *)(esp-32))) {
-            printf("here3!\n");
+            // printf("here3!\n");
             exit(-1);
          }
-         printf("here4\n");
+         // printf("here4\n");
          //Create a new frame for a page to grow the stack
          struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, pg_round_down(fault_addr), true, CREATE_SUP_PAGE_ENTRY);
          
@@ -197,7 +197,7 @@ page_fault (struct intr_frame *f)
      }  
 
      if (p->page_flag == FROM_FILE_SYSTEM){
-        printf("here5\n");
+      //   printf("here5\n");
       //Create frame entry without creating a supplemental page entry
       struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, pg_round_down(p->user_virtual_address), p->writable, DONT_CREATE_SUP_PAGE_ENTRY);
       uint8_t *kpage = frame->frame_address;

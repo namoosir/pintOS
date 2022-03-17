@@ -533,6 +533,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       
+      //Print debuging info
+      // printf("load_segment??? file: %p ofs: %d page_read_bytes: %d\n", file, ofs, page_read_bytes);
+
       struct page_data pg_data = save_page_data(file, ofs, page_read_bytes);
       
      
@@ -562,6 +565,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       //   }
 
       /* Advance. */
+      ofs += page_read_bytes;
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
