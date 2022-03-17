@@ -180,6 +180,7 @@ page_fault (struct intr_frame *f)
    //         break;
    //      }
    //   }
+
      (int)0xc010af14;
      (unsigned int)0x8050000;
 
@@ -209,7 +210,10 @@ page_fault (struct intr_frame *f)
      //grow stack
      if (p == NULL){
       //   printf("here2!\n");
-
+         if(fault_addr > PHYS_BASE || fault_addr < 0x08048000)
+         {
+            exit(-1);
+         }
          // TODO:: If not in page table then check for bad address
          if ((fault_addr < (void *)(esp-32))) {
             // printf("esp: %p, fault addr: %p\n", (void*)esp, fault_addr);
