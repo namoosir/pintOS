@@ -12,6 +12,7 @@
 #include "filesys/file.h"
 #include "threads/vaddr.h"
 #include "lib/string.h"
+#include "userprog/pagedir.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -66,6 +67,7 @@ exception_init (void)
      We need to disable interrupts for page faults because the
      fault address is stored in CR2 and needs to be preserved. */
   intr_register_int (14, 0, INTR_OFF, page_fault, "#PF Page-Fault Exception");
+//   sema_init(&file_read_sema, 1);
 }
 
 /* Prints exception statistics. */
@@ -162,62 +164,33 @@ page_fault (struct intr_frame *f)
   //check if data has been swapped out, then we need to swap it in
   //if it has not been swapped out, and its from the filesystem then we need to read it back
   //if not, swap out data then grow stack
-  char* esp = f->esp;
+  void* esp = f->esp;
+  if (fault_addr == NULL) {
+     exit(-1);
+  }
+  
 //   if(!user)
 //   {
-//    //   struct supplemental_page_entry *p = page_lookup(pg_round_down(fault_addr));
-//    //   printf("%d\n", p->page_flag);
-//    //   printf("here!\n");
+   //   struct supplemental_page_entry *p = page_lookup(pg_round_down(fault_addr));
+   //   printf("%d\n", p->page_flag);
+   //   printf("here!\n");
 //      exit(-1);
 //   }
-//   else 
-//   {   
+
      struct supplemental_page_entry *p = page_lookup(pg_round_down(fault_addr));
-   //   for(int i = 0; i <= 32; i++)
-   //   {
-   //      struct supplemental_page_entry *p = page_lookup(fault_addr+i);
-   //      if(p != NULL){
-   //         break;
-   //      }
-   //   }
+     if (!user && p == NULL && !thread_current()->is_performing_syscall) { //THIS IS A PROBLEM
+        exit(-1);
+     }
 
-     (int)0xc010af14;
-     (unsigned int)0x8050000;
-
-     (int)0xc003e7e4;
-     (unsigned int)0x8050000;
-
-     (int)0xc010fed4;
-     (unsigned int)0x20101234;
-
-     (int)0xbfffff80;
-     (unsigned int)0;
-
-     (int)0xbfffff6c;
-     0;
-
-     (int)0xbfffe000;
-     (unsigned int)0x1c;
-
-      0xbfffff98;
-      0xbfffef98; //both are uints here??
-
-      (int)0xbffef000;
-      (unsigned int)0x1c; //this should be passing
-
-
-
+     if (fault_addr < (void*)(0x08048000)) {
+         exit(-1);
+     }
+   0xbfffef8c;
+    0xc003e928;
      //grow stack
      if (p == NULL){
-      //   printf("here2!\n");
-         if(fault_addr > PHYS_BASE || fault_addr < 0x08048000)
-         {
-            exit(-1);
-         }
          // TODO:: If not in page table then check for bad address
-         if ((fault_addr < (void *)(esp-32))) {
-            // printf("esp: %p, fault addr: %p\n", (void*)esp, fault_addr);
-            // printf("here3!\n");
+         if (fault_addr < (void*)((unsigned int*)esp - (unsigned int *)32) && !write) {
             exit(-1);
          }
 
@@ -226,38 +199,48 @@ page_fault (struct intr_frame *f)
          struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, pg_round_down(fault_addr), true, CREATE_SUP_PAGE_ENTRY);
          
          //make sure address is not in kernel space
-         if (is_kernel_vaddr(pg_round_down(frame->page->user_virtual_address))) exit(-1);
-         
+         if (is_kernel_vaddr(pg_round_down(frame->page->user_virtual_address))) {
+            exit(-1);
+         }
+
+         // if (pagedir_get_page(thread_current ()->pagedir, (void*)fault_addr) == NULL) exit(-1);
+
          //Install the page
          if (!install_page(pg_round_down(frame->page->user_virtual_address), frame->frame_address, frame->page->writable)) exit(-1);
-     }  
-
-     if (p->page_flag == FROM_FILE_SYSTEM){
+      //   printf("7here\n");
+         return;
+      }
+      
+      if (p->page_flag == FROM_FILE_SYSTEM){
+        
       //   printf("here5\n");
       //Create frame entry without creating a supplemental page entry
       struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, pg_round_down(p->user_virtual_address), p->writable, DONT_CREATE_SUP_PAGE_ENTRY);
       uint8_t *kpage = frame->frame_address;
       frame->page = p;
 
-
+      // sema_down(&file_read_sema);
       //Read from file
       if (file_read_at (p->pg_data.file, kpage, p->pg_data.read_bytes, p->pg_data.ofs) != (int) p->pg_data.read_bytes) {
+         // printf("asdfhere\n");
+        
         exit(-1);
       }
       memset (kpage + p->pg_data.read_bytes, 0, 4096 - p->pg_data.read_bytes);
-            
+      // sema_up(&file_read_sema);
+
       //Install a new page
       if (!install_page(pg_round_down(p->user_virtual_address), kpage, p->writable)) exit(-1);
       p->page_flag = FROM_FRAME_TABLE;
       // p->frame = frame;
-      return;
+      // return;
      }
+     
      if (write == 1 && not_present == 0) exit(-1);
    // Filsystem, if mem mapped file then we write data back to file
    // If the data is not swapped out then we write it back to the file
    // Swap Table -> need to swap back in
    //   uint8_t* kpage = frame_add(PAL_USER | PAL_ZERO, p->user_virtual_address, p->writable);
-     
      
      return;
 //   }

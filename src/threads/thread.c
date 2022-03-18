@@ -217,7 +217,7 @@ thread_create (const char *name, int priority,
   sf->ebp = 0;
   
   hash_init(&(t->supplemental_page_hash_table), page_hash, page_table_hash_comparator, NULL);
-
+  t->is_performing_syscall = false;
   /* Add to run queue. */
   thread_unblock (t);
 

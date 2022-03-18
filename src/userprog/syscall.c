@@ -17,7 +17,6 @@
 static void syscall_handler (struct intr_frame *);
 void exit (int status);
 static struct semaphore file_write_sema; /* semaphore for file write */
-static struct semaphore file_read_sema; /* semaphore for file read */
 static struct semaphore file_modification_sema; /* semaphore for other file operations */
 static bool sema_initialized; /*A flag to initialize semaphores only once */
 
@@ -114,9 +113,10 @@ static bool
 bad_ptr_arg(int arg)
 {
   if ((const char*)arg == NULL || 
-        (void*)arg <= LOWEST_ADDR || is_kernel_vaddr((void *)arg) ||
-        pagedir_get_page(thread_current ()->pagedir, (void*)arg) == NULL)
+        (void*)arg <= LOWEST_ADDR || is_kernel_vaddr((void *)arg) /* ||
+         pagedir_get_page(thread_current ()->pagedir, (void*)arg) == NULL */ )
   {
+    // printf("first: %d, second: %d, third: %d\n", (const char*)arg == NULL, is_kernel_vaddr((void *)arg), pagedir_get_page(thread_current ()->pagedir, (void*)arg) == NULL);
     return true;
   }
   return false;
@@ -138,6 +138,10 @@ syscall_handler (struct intr_frame *f UNUSED)
     sema_init(&file_modification_sema, 1);
     sema_initialized = true;
   }
+
+  thread_current()->is_performing_syscall = true;
+
+
   
   //extract the syscall number
   copy_in (&syscall_number, f->esp, sizeof syscall_number);

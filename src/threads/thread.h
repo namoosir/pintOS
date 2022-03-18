@@ -110,6 +110,7 @@ struct thread
     int exit_status[MAX_CHILDREN];               /* Exit status of the child threada */
     char *malloced_pointers[30];       /*A list of pointer we need to free when the thread exits*/
 #endif
+    bool is_performing_syscall;
     struct hash supplemental_page_hash_table;
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
