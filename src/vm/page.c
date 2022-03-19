@@ -5,6 +5,7 @@
 #include "userprog/pagedir.h"
 #include "devices/timer.h"
 #include "threads/vaddr.h"
+#include "vm/frame.h"
 
 bool
 page_table_hash_comparator(const struct hash_elem *a, const struct hash_elem *b, void* aux UNUSED) 
@@ -71,6 +72,27 @@ save_page_data(struct file *file, int32_t ofs, uint32_t read_bytes)
   p.ofs = ofs;
   p.read_bytes = read_bytes;
   return p;
+}
+
+void
+page_remove(struct supplemental_page_entry *s)
+{
+  if(s != NULL){
+    hash_delete(&thread_current()->supplemental_page_hash_table, &s->supplemental_page_elem);
+    //Free corresponding frame by looping over the frame table
+    struct list_elem *e;
+    for (e = list_begin (&frame_table); e != list_end (&frame_table);
+         e = list_next (e))
+    {
+      struct single_frame_entry *f = list_entry (e, struct single_frame_entry, frame_elem);
+      if(f->page_entry == s){
+        frame_remove(f);
+        break;
+      }
+    }
+
+    free(s);
+  }
 }
 
 

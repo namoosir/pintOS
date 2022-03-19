@@ -35,3 +35,15 @@ frame_add(enum palloc_flags flags, uint8_t *user_virtual_address, bool writable,
     list_push_front(&frame_table, &frame->frame_elem);
     return frame;
 }
+
+void
+frame_remove(struct single_frame_entry *frame)
+{
+    if(frame != NULL){
+        list_remove(&frame->frame_elem);
+        pagedir_clear_page (frame->holder->pagedir, frame->page->user_virtual_address);
+        palloc_free_page(frame->frame_address);
+        free(frame);
+    }
+
+}
