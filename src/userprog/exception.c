@@ -177,7 +177,7 @@ page_fault (struct intr_frame *f)
 //      exit(-1);
 //   }
 
-     struct supplemental_page_entry *p = page_lookup(pg_round_down(fault_addr));
+     struct supplemental_page_entry *p = page_lookup(pg_round_down(fault_addr), thread_current());
      if (!user && p == NULL && !thread_current()->is_performing_syscall) { //THIS IS A PROBLEM
         exit(-1);
      }
@@ -185,8 +185,7 @@ page_fault (struct intr_frame *f)
      if (fault_addr < (void*)(0x08048000)) {
          exit(-1);
      }
-   0xbfffef8c;
-    0xc003e928;
+
      //grow stack
      if (p == NULL){
          // TODO:: If not in page table then check for bad address
@@ -221,9 +220,8 @@ page_fault (struct intr_frame *f)
 
       // sema_down(&file_read_sema);
       //Read from file
-      if (file_read_at (p->pg_data.file, kpage, p->pg_data.read_bytes, p->pg_data.ofs) != (int) p->pg_data.read_bytes) {
-         // printf("asdfhere\n");
-        
+      int amount_read = file_read_at (p->pg_data.file, kpage, p->pg_data.read_bytes, p->pg_data.ofs);
+      if (amount_read != (int) p->pg_data.read_bytes) {
         exit(-1);
       }
       memset (kpage + p->pg_data.read_bytes, 0, 4096 - p->pg_data.read_bytes);
@@ -254,4 +252,3 @@ page_fault (struct intr_frame *f)
           user ? "user" : "kernel");
   kill (f);
 }
-

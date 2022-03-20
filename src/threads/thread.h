@@ -109,6 +109,8 @@ struct thread
     tid_t child_process_list[MAX_CHILDREN];      /* Array of child processes */
     int exit_status[MAX_CHILDREN];               /* Exit status of the child threada */
     char *malloced_pointers[30];       /*A list of pointer we need to free when the thread exits*/
+    struct list mapping_info_list;
+    int mapping_count;
 #endif
     bool is_performing_syscall;
     struct hash supplemental_page_hash_table;

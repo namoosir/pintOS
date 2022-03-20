@@ -30,13 +30,13 @@ page_hash (const struct hash_elem *p_, void *aux UNUSED)
 /* Returns the page containing the given virtual address,
    or a null pointer if no such page exists. */
 struct supplemental_page_entry *
-page_lookup (void *address)
+page_lookup (void *address, struct thread* t)
 {
   struct supplemental_page_entry p;
   struct hash_elem *e;
 
   p.user_virtual_address = address;
-  e = hash_find (&thread_current()->supplemental_page_hash_table, &p.supplemental_page_elem);
+  e = hash_find (&t->supplemental_page_hash_table, &p.supplemental_page_elem);
   return e != NULL ? hash_entry (e, struct supplemental_page_entry, supplemental_page_elem) : NULL;
 }
 
@@ -55,6 +55,8 @@ new_supplemental_page_entry(int page_flag, uint8_t* user_virtual_address, bool w
   s->writable = writable;
   s->page_flag = page_flag;
   s->pg_data = pg_data;
+  s->evicted = 0;
+  s->block_index = -1;
 
   struct thread *curr = thread_current();
   if (NULL != hash_insert(&(curr->supplemental_page_hash_table), &s->supplemental_page_elem)) 
@@ -85,7 +87,7 @@ page_remove(struct supplemental_page_entry *s)
          e = list_next (e))
     {
       struct single_frame_entry *f = list_entry (e, struct single_frame_entry, frame_elem);
-      if(f->page_entry == s){
+      if(f->page == s){
         frame_remove(f);
         break;
       }

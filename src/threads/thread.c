@@ -218,6 +218,12 @@ thread_create (const char *name, int priority,
   
   hash_init(&(t->supplemental_page_hash_table), page_hash, page_table_hash_comparator, NULL);
   t->is_performing_syscall = false;
+
+  #ifdef USERPROG
+    list_init(&t->mapping_info_list);
+    t->mapping_count = 0;
+  #endif
+  
   /* Add to run queue. */
   thread_unblock (t);
 
