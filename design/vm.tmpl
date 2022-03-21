@@ -225,8 +225,9 @@ Since we only assign 1 frame and 1 supplemental entry when setting up the proces
 So, if our page_lookup function returns NULL, then we know that there is no supplemental page entry for the fault address and therefor we 
 need to extend the stack.
 
-We also check if the page fault occured 32 bytes below the stack pointer. If so, we can procceed to extend the stack.
-Otherwise, that fault was not cause by stack growth because the PUSHA instruction only pushes 32 bytes onto the stack.
+We also check if the page fault occured less than 32 bytes below the stack pointer (esp). If so, we can procceed to 
+extend the stack. Otherwise, that fault was not cause by stack growth because the PUSHA instruction only pushes 32 bytes 
+onto the stack.
 
 ---- SYNCHRONIZATION ----
 
