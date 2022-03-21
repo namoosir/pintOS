@@ -1,5 +1,5 @@
-#include "frame.h"
-#include "page.h"
+#include "vm/frame.h"
+#include "vm/page.h"
 #include "lib/kernel/list.h"
 #include "threads/malloc.h"
 #include "threads/thread.h"
@@ -25,8 +25,7 @@ frame_add(enum palloc_flags flags, uint8_t *user_virtual_address, bool writable,
 
     if (page_addr == NULL)
     {
-        // frame_evict();
-        struct single_frame_entry *replacer_frame = clear_page_and_swap_insert();
+        struct single_frame_entry *replacer_frame = frame_evict();
         page_addr = palloc_get_page (flags);
         if (page_addr == NULL)
         {
@@ -80,33 +79,22 @@ frame_remove(struct single_frame_entry *frame)
     }
 }
 
-void 
-frame_evict()
-{
-    struct single_frame_entry *to_evict = approximate_LRU();
-    pagedir_clear_page(to_evict->holder->pagedir, to_evict->page->user_virtual_address);
-    frame_remove(to_evict);
-    //get the next free block index
-    //write the data of the frame to said block
-
-}
-
 struct single_frame_entry*
-clear_page_and_swap_insert()
+frame_evict(void)
 {
     struct single_frame_entry *to_evict = approximate_LRU();
-
+    to_evict->page->evicted = 1;
     pagedir_clear_page(to_evict->holder->pagedir, to_evict->page->user_virtual_address);
-    read_or_write_from_block(to_evict->page, index, WRITE);
-    //get the next free block index
-    //write the data of the frame to said block
+    read_write_from_block(to_evict, 0, WRITE);
+    
+    return to_evict;
 }
 
 //Given a list get the item at that index
 struct single_frame_entry*
 get_frame_at_index(int index)
 {
-    if(index >= list_size(&frame_table)) return NULL;
+    if((size_t)index >= list_size(&frame_table)) return NULL;
     if(index < 0) return NULL;
 
     struct list_elem *e;
@@ -123,15 +111,16 @@ get_frame_at_index(int index)
 }
 
 void
-increment_clock_pointer(){
+increment_clock_pointer(void)
+{
     clock_pointer++;
-    if(clock_pointer >= list_size(&frame_table)){
+    if((size_t)clock_pointer >= list_size(&frame_table)){
         clock_pointer = 0;
     }
 }
 
 struct single_frame_entry* 
-approximate_LRU()
+approximate_LRU(void)
 {
     // int random_frame_number = rand() % list_size(&frame_table);
     // int i = 0;
