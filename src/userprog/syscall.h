@@ -10,7 +10,7 @@ void exit (int status);
 void perform_munmap(int map_id);
 void free_pages_in_hash (struct hash_elem *e, void *aux);
 
-struct semaphore file_read_sema; /* semaphore for file read */
+struct semaphore file_modification_sema;
 
 struct mapping_information
 {

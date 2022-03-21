@@ -8,7 +8,7 @@
 
 enum flag{
     FROM_FRAME_TABLE,
-    FROM_SWAPED,
+    FROM_SWAPPED,
     FROM_FILE_SYSTEM,
     ALL_ZERO,
 };
@@ -29,7 +29,6 @@ struct supplemental_page_entry
     struct page_data pg_data;
     // Flag to indicate swaped out or filemapped page
     enum flag page_flag;
-    bool evicted;
     int block_index;
     
     struct hash_elem supplemental_page_elem; 

@@ -13,9 +13,13 @@
 #include "threads/vaddr.h"
 #include "lib/string.h"
 #include "userprog/pagedir.h"
+#include "vm/swap.h"
+#include "threads/synch.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
+
+static struct semaphore swap_sema;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
@@ -67,7 +71,7 @@ exception_init (void)
      We need to disable interrupts for page faults because the
      fault address is stored in CR2 and needs to be preserved. */
   intr_register_int (14, 0, INTR_OFF, page_fault, "#PF Page-Fault Exception");
-//   sema_init(&file_read_sema, 1);
+  sema_init(&swap_sema, 1);
 }
 
 /* Prints exception statistics. */
@@ -159,86 +163,106 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
   //If userprog needs more than 1 page
+   // sema_down(&swap_sema);
 
   //1. Data has 
   //check if data has been swapped out, then we need to swap it in
   //if it has not been swapped out, and its from the filesystem then we need to read it back
   //if not, swap out data then grow stack
   void* esp = f->esp;
+  
   if (fault_addr == NULL) {
      exit(-1);
   }
-  
-//   if(!user)
-//   {
-   //   struct supplemental_page_entry *p = page_lookup(pg_round_down(fault_addr));
-   //   printf("%d\n", p->page_flag);
-   //   printf("here!\n");
-//      exit(-1);
-//   }
 
-     struct supplemental_page_entry *p = page_lookup(pg_round_down(fault_addr), thread_current());
-     if (!user && p == NULL && !thread_current()->is_performing_syscall) { //THIS IS A PROBLEM
-        exit(-1);
-     }
+   struct supplemental_page_entry *p = page_lookup(pg_round_down(fault_addr), thread_current());
+   if (!user && p == NULL && !thread_current()->is_performing_syscall) { //THIS IS A PROBLEM
+      printf("%s\n", thread_current()->name);
+      exit(-1);
+   }
 
-     if (fault_addr < (void*)(0x08048000)) {
+   if (fault_addr < (void*)(0x08048000)) {
+      exit(-1);
+   }
+
+   //grow stack
+   if (p == NULL){
+      // TODO:: If not in page table then check for bad address
+      if (fault_addr < (void*)((unsigned int*)esp - (unsigned int *)32) && !write) {
          exit(-1);
-     }
-
-     //grow stack
-     if (p == NULL){
-         // TODO:: If not in page table then check for bad address
-         if (fault_addr < (void*)((unsigned int*)esp - (unsigned int *)32) && !write) {
-            exit(-1);
-         }
-
-         // printf("here4\n");
-         //Create a new frame for a page to grow the stack
-         struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, pg_round_down(fault_addr), true, CREATE_SUP_PAGE_ENTRY);
-         
-         //make sure address is not in kernel space
-         if (is_kernel_vaddr(pg_round_down(frame->page->user_virtual_address))) {
-            exit(-1);
-         }
-
-         // if (pagedir_get_page(thread_current ()->pagedir, (void*)fault_addr) == NULL) exit(-1);
-
-         //Install the page
-         if (!install_page(pg_round_down(frame->page->user_virtual_address), frame->frame_address, frame->page->writable)) exit(-1);
-      //   printf("7here\n");
-         return;
       }
+
+      // printf("here4\n");
+      //Create a new frame for a page to grow the stack
+      struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, pg_round_down(fault_addr), true, CREATE_SUP_PAGE_ENTRY);
       
-      if (p->page_flag == FROM_FILE_SYSTEM){
-        
+      //make sure address is not in kernel space
+      if (is_kernel_vaddr(pg_round_down(frame->page->user_virtual_address))) {
+         exit(-1);
+      }
+
+      // if (pagedir_get_page(thread_current ()->pagedir, (void*)fault_addr) == NULL) exit(-1);
+
+      //Install the page
+      if (!install_page(pg_round_down(frame->page->user_virtual_address), frame->frame_address, frame->page->writable)) {
+         exit(-1);
+      }
+   //   printf("7here\n");
+      // sema_up(&swap_sema);
+
+      return;
+   }
+      
+   if (p->page_flag == FROM_FILE_SYSTEM){
+      
       //   printf("here5\n");
       //Create frame entry without creating a supplemental page entry
       struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, pg_round_down(p->user_virtual_address), p->writable, DONT_CREATE_SUP_PAGE_ENTRY);
       uint8_t *kpage = frame->frame_address;
       frame->page = p;
 
-      // sema_down(&file_read_sema);
+      // sema_down(&file_modification_sema);
       //Read from file
       int amount_read = file_read_at (p->pg_data.file, kpage, p->pg_data.read_bytes, p->pg_data.ofs);
       if (amount_read != (int) p->pg_data.read_bytes) {
-        exit(-1);
+         exit(-1);
       }
       memset (kpage + p->pg_data.read_bytes, 0, 4096 - p->pg_data.read_bytes);
-      // sema_up(&file_read_sema);
+
+      // sema_up(&file_modification_sema);
 
       //Install a new page
-      if (!install_page(pg_round_down(p->user_virtual_address), kpage, p->writable)) exit(-1);
+      if (!install_page(pg_round_down(p->user_virtual_address), kpage, p->writable)) {
+         exit(-1);
+      }
       p->page_flag = FROM_FRAME_TABLE;
       // p->frame = frame;
       // return;
-     }
+   }
      
-     if (write == 1 && not_present == 0) exit(-1);
+     if (p->page_flag == FROM_SWAPPED){
+
+      struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, pg_round_down(p->user_virtual_address), p->writable, DONT_CREATE_SUP_PAGE_ENTRY);
+      frame->page = p;
+
+      read_write_from_block(frame, p->block_index, READ);
+      p->block_index = -1;
+
+      if (!install_page(pg_round_down(p->user_virtual_address), frame->frame_address, p->writable)) {
+         exit(-1);
+      }
+      p->page_flag = FROM_FRAME_TABLE;
+      
+     }
+
+     if (write == 1 && not_present == 0) {
+        exit(-1);
+     }
    // Filsystem, if mem mapped file then we write data back to file
    // If the data is not swapped out then we write it back to the file
    // Swap Table -> need to swap back in
    //   uint8_t* kpage = frame_add(PAL_USER | PAL_ZERO, p->user_virtual_address, p->writable);
+      // sema_up(&swap_sema);
      
      return;
 //   }

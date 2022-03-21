@@ -20,14 +20,16 @@
 
 static void syscall_handler (struct intr_frame *);
 void exit (int status);
-static struct semaphore file_write_sema; /* semaphore for file write */
-static struct semaphore file_modification_sema; /* semaphore for other file operations */
+// static struct semaphore file_modification_sema; /* semaphore for other file operations */
 static bool sema_initialized; /*A flag to initialize semaphores only once */
+// static struct semaphore exec_sema;
 
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  sema_init(&file_modification_sema, 1);
+  // sema_init(&exec_sema, 1);
 }
 
 /* Reads a byte at user virtual address UADDR.
@@ -56,10 +58,21 @@ get_user (const uint8_t *uaddr)
 // }
 
 /*Hash action function to free elements of a hashtable*/
-void free_pages_in_hash (struct hash_elem *e, void *aux UNUSED)
+void free_pages_in_hash (struct hash_elem *he, void *aux UNUSED)
 {
-  struct supplemental_page_entry *x =  hash_entry(e, struct supplemental_page_entry, supplemental_page_elem);
-  page_remove(x);
+  struct supplemental_page_entry *x =  hash_entry(he, struct supplemental_page_entry, supplemental_page_elem);
+  
+  struct list_elem *e;
+  for (e = list_begin (&frame_table); e != list_end (&frame_table);
+        e = list_next (e))
+  {
+    struct single_frame_entry *f = list_entry (e, struct single_frame_entry, frame_elem);
+    if(f->page == x){
+      frame_remove(f);
+      break;
+    }
+  }
+  // page_remove(x);
 }
 
 /*Performs memory unmapping*/
@@ -83,9 +96,9 @@ void perform_munmap(int map_id)
   {
     struct file *file = map_info->file;
     //Prevent other tasks when writing
-    sema_down(&file_write_sema);
+    sema_down(&file_modification_sema);
 
-    list_remove(&map_info->map_elem);
+    // list_remove(&map_info->map_elem);
 
     int total_pages = (map_info->end_addr - map_info->start_addr) / PGSIZE;
     int size = map_info->file_size;
@@ -104,8 +117,8 @@ void perform_munmap(int map_id)
       page_remove(page_lookup(map_info->start_addr + i*PGSIZE, thread_current()));
     }
 
-    free(map_info);
-    sema_up(&file_write_sema);
+    // free(map_info);
+    sema_up(&file_modification_sema);
   }
 }
 /* 
@@ -143,11 +156,24 @@ exit (int status)
   thread_current()->parent->exit_status[child_process_index] = status;
 
   //TODO: FIX SO THAT ALL MAPPED ELEMENTS ARE UNMAPPED
-  perform_munmap(0);
+  for (struct list_elem *e = list_begin (&thread_current()->mapping_info_list); e != list_end (&thread_current()->mapping_info_list);
+          e = list_next (e))
+  {
+    struct mapping_information *map_info = list_entry (e, struct mapping_information, map_elem);
+    perform_munmap(map_info->mapping_id);
+  }
 
-  //free hash table entries
-  // hash_action_func *free_pages = free_pages_in_hash;
-  // hash_apply(&thread_current()->supplemental_page_hash_table, free_pages);
+  //FREE MAPPING IDS
+  while (!list_empty(&thread_current()->mapping_info_list))
+  {
+    struct list_elem *e = list_pop_front(&thread_current()->mapping_info_list);
+    struct mapping_information *map_info = list_entry (e, struct mapping_information, map_elem);
+    free(map_info);
+  }
+
+  //TODO: free hash table entries
+  hash_action_func *free_pages = free_pages_in_hash;
+  hash_apply(&thread_current()->supplemental_page_hash_table, free_pages);
   // hash_destroy(&thread_current()->supplemental_page_hash_table, free_pages);
   //exit from the thread
   thread_exit ();
@@ -197,9 +223,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   int args[3];
 
   if(!sema_initialized){
-    sema_init(&file_read_sema, 1);
-    sema_init(&file_write_sema, 1);
-    sema_init(&file_modification_sema, 1);
+    // sema_init(&file_modification_sema, 1);
     sema_initialized = true;
   }
 
@@ -283,13 +307,13 @@ syscall_handler (struct intr_frame *f UNUSED)
       else if (thread_current()->fd_array[args[0]] != NULL) 
       {
         //Prevent other tasks when writing
-        sema_down(&file_write_sema);
+        sema_down(&file_modification_sema);
 
         //write to some other file
         int read_bytes = file_write (thread_current()->fd_array[args[0]], buffer, size);
         f->eax = read_bytes;
         
-        sema_up(&file_write_sema);
+        sema_up(&file_modification_sema);
       }
       else
       {
@@ -374,8 +398,8 @@ syscall_handler (struct intr_frame *f UNUSED)
       {
         sema_down(&file_modification_sema);
         file_close(thread_current()->fd_array[args[0]]);
-        thread_current()->fd_array[args[0]] = NULL;
         sema_up(&file_modification_sema);
+        thread_current()->fd_array[args[0]] = NULL;
       }
     }
   }
@@ -407,7 +431,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       {
         //Prevent other tasks when reading
         // printf("SEMA DOWN %s\n", thread_current()->name);
-        sema_down(&file_read_sema);
+        sema_down(&file_modification_sema);
         // printf("entering critical section %s\n", thread_current()->name);
 
         //some other file
@@ -415,7 +439,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         f->eax = read_bytes;
 
         // printf("exiting critical section %s\n", thread_current()->name);
-        sema_up(&file_read_sema);
+        sema_up(&file_modification_sema);
         // printf("SEMA UP %s\n", thread_current()->name);
       }
       else
@@ -468,6 +492,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if (syscall_number == SYS_EXEC)
   {
+    // sema_down(&exec_sema);
     if (bad_ptr_arg(args[0]))
     {
       exit(-1);
@@ -478,6 +503,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     tid_t child_pid = process_execute ((const char*) args[0]);
 
     f->eax = child_pid;
+    // sema_up(&exec_sema);
   }
   else if (syscall_number == SYS_WAIT) 
   {
@@ -493,6 +519,8 @@ syscall_handler (struct intr_frame *f UNUSED)
       {
         sema_down(&file_modification_sema);
         file_size = file_length (thread_current()->fd_array[args[0]]);
+        sema_up(&file_modification_sema);
+
         uint8_t *upage = (uint8_t *)args[1];
         if (file_size == 0 || pg_round_down(upage) != upage || upage == 0)
         {
@@ -507,17 +535,6 @@ syscall_handler (struct intr_frame *f UNUSED)
           return;
         }
 
-        // for (struct list_elem *e = list_begin (&thread_current()->mapping_info_list); e != list_end (&thread_current()->mapping_info_list);
-        //    e = list_next (e))
-        // {
-        //   struct mapping_information *map_info = list_entry (e, struct mapping_information, map_elem);
-        //   if (upage > map_info->start_addr && upage < map_info->end_addr)
-        //   {
-        //     f->eax = -1;
-        //     return;
-        //   }
-        // }
-
         int read_bytes = file_size;
         int zero_bytes = read_bytes % PGSIZE;
         int ofs = 0;
@@ -531,10 +548,17 @@ syscall_handler (struct intr_frame *f UNUSED)
         }
         
         new_mapping->start_addr = upage;
+
+        sema_down(&file_modification_sema);
         struct file* file = file_reopen(thread_current()->fd_array[args[0]]);
+        sema_up(&file_modification_sema);
+
         new_mapping->file = file;
 
+        sema_down(&file_modification_sema);
         file_seek (file, ofs);
+        sema_up(&file_modification_sema);
+
         while (read_bytes > 0 || zero_bytes > 0)
         {
           size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
@@ -561,7 +585,6 @@ syscall_handler (struct intr_frame *f UNUSED)
 
         thread_current()->mapping_count++;
         
-        sema_up(&file_modification_sema);
       }
       else 
       {
@@ -576,6 +599,26 @@ syscall_handler (struct intr_frame *f UNUSED)
   else if (syscall_number == SYS_MUNMAP)
   {
     perform_munmap(args[0]);
+
+    //FREE CORRECT ELEMENT
+    int map_exists = 0;
+    struct mapping_information *map_info;
+
+    for (struct list_elem *e = list_begin (&thread_current()->mapping_info_list); e != list_end (&thread_current()->mapping_info_list);
+            e = list_next (e))
+    {
+      map_info = list_entry (e, struct mapping_information, map_elem);
+      if (args[0] == map_info->mapping_id)
+      {
+        map_exists = 1;
+        break;
+      }
+    }
+
+    if (map_exists) {
+      list_remove(&map_info->map_elem);
+      free(map_info);
+    }
   }
   // free(args);
 }

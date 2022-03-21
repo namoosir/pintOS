@@ -55,7 +55,6 @@ new_supplemental_page_entry(int page_flag, uint8_t* user_virtual_address, bool w
   s->writable = writable;
   s->page_flag = page_flag;
   s->pg_data = pg_data;
-  s->evicted = 0;
   s->block_index = -1;
 
   struct thread *curr = thread_current();

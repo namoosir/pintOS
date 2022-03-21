@@ -46,7 +46,7 @@ process_execute (const char *file_name)
      Otherwise there's a race between the caller and load(). */
   // fn_copy = frame_add(0);
   fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  if (fn_copy == NULL) 
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
