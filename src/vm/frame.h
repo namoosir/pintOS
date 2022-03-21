@@ -25,5 +25,6 @@ void frame_table_init(void);
 struct single_frame_entry* frame_add(enum palloc_flags flags, uint8_t *user_virtual_address, bool writable, enum create_sup_page_entry);
 void frame_remove(struct single_frame_entry *frame);
 void frame_evict();
+struct single_frame_entry* clear_page();
 struct single_frame_entry* approximate_LRU();
 #endif /* vm/frame.h */

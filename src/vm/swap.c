@@ -3,10 +3,12 @@
 #include "vm/frame.h"
 
 static struct block* swap_block;
+static struct bitmap* occupied_swap_bitmap;
 
 void swap_init()
 {
     swap_block = block_get_role(BLOCK_SWAP);
+    occupied_swap_bitmap = bitmap_create( block_size(swap_block) );
 }
 
 void
