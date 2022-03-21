@@ -10,6 +10,7 @@
 #include "userprog/syscall.h"
 #include "devices/timer.h"
 #include "threads/vaddr.h"
+#include "stdio.h"
 
 static int clock_pointer = 0;
 static struct semaphore frame_sema;
@@ -36,6 +37,7 @@ frame_add(enum palloc_flags flags, uint8_t *user_virtual_address, bool writable,
 
     if (page_addr == NULL)
     {
+        // printf("NEED TO SWAP\n");
         struct single_frame_entry *replacer_frame = frame_evict();
         
         replacer_frame->holder = thread_current();
@@ -166,9 +168,9 @@ approximate_LRU(void)
                 if(pagedir_is_dirty(f->holder->pagedir, f->page->user_virtual_address)){
                     //Write the changes
 
-                    // sema_down(&file_modification_sema);
+                    sema_down(&file_modification_sema);
                     file_write_at(f->page->pg_data.file, f->frame_address, f->page->pg_data.read_bytes, f->page->pg_data.ofs);
-                    // sema_up(&file_modification_sema);
+                    sema_up(&file_modification_sema);
 
                     //Set this frame to not dirty
                     pagedir_set_dirty (f->holder->pagedir, f->page->user_virtual_address, false);

@@ -115,6 +115,7 @@ main (void)
 #ifdef USERPROG
   exception_init ();
   syscall_init ();
+  sema_init(&executable_list_sema, 1);
 #endif
 
   /* Start thread scheduler and enable interrupts. */

@@ -22,14 +22,14 @@ static void syscall_handler (struct intr_frame *);
 void exit (int status);
 // static struct semaphore file_modification_sema; /* semaphore for other file operations */
 static bool sema_initialized; /*A flag to initialize semaphores only once */
-// static struct semaphore exec_sema;
+static struct semaphore execa_sema;
 
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   sema_init(&file_modification_sema, 1);
-  // sema_init(&exec_sema, 1);
+  sema_init(&execa_sema, 1);
 }
 
 /* Reads a byte at user virtual address UADDR.
@@ -130,8 +130,14 @@ void perform_munmap(int map_id)
 void
 exit (int status)
 {
-  printf("%s: exit(%d)\n", thread_current()->name, status);
-  
+  printf("%s: exit(%d)\n", thread_current()->name, status);  
+
+  // struct file *file1 = filesys_open ("child-sort");
+  // struct file *file2 = filesys_open ("child-sort");
+
+
+  // printf("file1 %p, file2 %p\n", file1, file2);
+
   //close any open file descriptors
   for (int i = 2; i < MAX_FILE_DESCRIPTORS; i++)
   {
@@ -492,7 +498,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if (syscall_number == SYS_EXEC)
   {
-    // sema_down(&exec_sema);
+    // sema_down(&execa_sema);
     if (bad_ptr_arg(args[0]))
     {
       exit(-1);
@@ -503,7 +509,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     tid_t child_pid = process_execute ((const char*) args[0]);
 
     f->eax = child_pid;
-    // sema_up(&exec_sema);
+    // sema_up(&execa_sema);
   }
   else if (syscall_number == SYS_WAIT) 
   {

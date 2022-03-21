@@ -22,15 +22,15 @@
 #include "vm/frame.h"
 #include "lib/kernel/hash.h"
 #include "vm/page.h"
+#include "userprog/syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
 //Array of executable file pointers
 static struct file* executable_list[MAX_CHILDREN]; /* List of all the executables currently running */
-static int executable_list_idx = 0;                /* Index of the most recent executable launched */
+static int executable_list_idx = 3;                /* Index of the most recent executable launched */
 static bool executable_list_unsuccess[MAX_CHILDREN]; /* List of executables that were not able to run */
-static int executable_list_unsuccess_idx = 0; /* Keeps track of the most recent executable that was unsuccesful */
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -49,6 +49,7 @@ process_execute (const char *file_name)
   if (fn_copy == NULL) 
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+  // printf("inside process execute %s\n", fn_copy);
 
   /* Get the name of the userprog */
   char *raw_name = (char *)malloc ((strlen (file_name) + 1) * sizeof (char));
@@ -73,6 +74,8 @@ process_execute (const char *file_name)
   struct thread *cur_parent = thread_current();
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (actual_name, PRI_DEFAULT, start_process, fn_copy);
+  
+  // printf("tid: %d\n", tid);
 
   for (int i = 0; i < MAX_CHILDREN; i++)
   {
@@ -91,9 +94,9 @@ process_execute (const char *file_name)
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
 
-  if (executable_list_unsuccess[executable_list_unsuccess_idx] == true){
-    executable_list_unsuccess[executable_list_unsuccess_idx] = false;
-    executable_list_unsuccess_idx--;
+  if (executable_list_unsuccess[tid] == true){
+    // executable_list_unsuccess[executable_list_unsuccess_idx] = false;
+    // executable_list_unsuccess_idx--;
     
     //Free the malloced pointers we stored before
     int i = 0;
@@ -128,9 +131,15 @@ start_process (void *file_name_)
   palloc_free_page (file_name);
   if (!success) 
   {
-    executable_list_unsuccess[executable_list_unsuccess_idx] = true;
+    // printf("inside start process %s\n", file_name);
+    // printf("failed to load\n");
+    sema_down(&executable_list_sema);
+    executable_list_unsuccess[executable_list_idx] = true;
+    sema_up(&executable_list_sema);
     thread_exit ();
   }
+  executable_list_idx++;
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -183,10 +192,12 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-  executable_list_idx--;
-
-  file_close(executable_list[executable_list_idx]);
-  executable_list[executable_list_idx] = NULL;
+  // executable_list_idx--;
+  // printf("callled exit %d\n", cur->tid);
+  sema_down(&executable_list_sema);
+  file_close(executable_list[cur->tid]);
+  executable_list[cur->tid] = NULL;
+  sema_up(&executable_list_sema);
   
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -216,7 +227,7 @@ process_exit (void)
 
     sema_up(&cur->parent->process_sema);
 
-    //Free the malloced pointers we stored before
+    // Free the malloced pointers we stored before
     i = 0;
     while (i < 30 && thread_current ()->malloced_pointers[i] != NULL) 
     {
@@ -325,6 +336,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   bool success = false;
   int i;
 
+  // printf("beginning of load %s\n", file_name);
+
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
@@ -349,8 +362,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
     return TID_ERROR;
 
   /* Open executable file. */
+  sema_down(&file_modification_sema);
   file = filesys_open (actual_name);
-  
+  sema_up(&file_modification_sema);
+
+  // printf("ARRAY AFTER OPEN\n");
+  // for(int i = 3; i < 10; i++) {
+  //   printf("i: %d, FILE: %p, exec_idx: %d\n", i, executable_list[i], executable_list_idx);
+  // }
+
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", actual_name);
@@ -370,11 +390,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
       goto done; 
     }
 
+  sema_down(&executable_list_sema);
   executable_list[executable_list_idx] = file;
-  executable_list_idx++;
+  sema_up(&executable_list_sema);
 
-  executable_list_unsuccess_idx++;
+  // printf("file ptr %p\n", file);
+
   file_deny_write(file);
+
+  // printf("after deny write %s size: %d \n", actual_name, file_length(file));
+
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
@@ -382,13 +407,30 @@ load (const char *file_name, void (**eip) (void), void **esp)
     {
       struct Elf32_Phdr phdr;
 
-      if (file_ofs < 0 || file_ofs > file_length (file))
+      // printf("in loop %s size: %d \n", actual_name, file_length(file));
+
+
+      if (file_ofs < 0 || file_ofs > file_length (file)) {
+        // printf("offset fail offset: %d, file_size: %d\n", file_ofs, file_length(file));
+        // printf("inside load %s\n", file_name);
         goto done;
+      }
+
+      // printf("after offset check %s size: %d \n", actual_name, file_length(file));
+
       file_seek (file, file_ofs);
+
+      // printf("after seeking %s size: %d \n", actual_name, file_length(file));
 
       if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
         goto done;
+
+      // printf("after weird read check %s size: %d \n", actual_name, file_length(file));
+      
       file_ofs += sizeof phdr;
+
+      // printf("before switch statement %s size: %d \n", actual_name, file_length(file));
+
       switch (phdr.p_type) 
         {
         case PT_NULL:
@@ -403,6 +445,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
         case PT_SHLIB:
           goto done;
         case PT_LOAD:
+          // printf("before validate segment size: %d \n", file_length(file));
+
           if (validate_segment (&phdr, file)) 
             {
               bool writable = (phdr.p_flags & PF_W) != 0;
@@ -425,6 +469,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
+              // printf("before load segment size: %d \n", file_length(file));
+              
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
                 goto done;
@@ -435,9 +481,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
         }
     }
 
+  // printf("after loop %s size: %d \n", actual_name, file_length(file));
+  
+
   /* Set up stack. */
   if (!setup_stack (esp, file_name))
     goto done;
+
+  // printf("after stack %s size: %d \n", actual_name, file_length(file));
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -523,6 +574,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
+  // printf("inside load segment size: %d \n", file_length(file));
+  
   file_seek (file, ofs);
   while (read_bytes > 0 || zero_bytes > 0) 
     {
@@ -570,6 +623,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
     }
+  // printf("end of load segment size: %d \n", file_length(file));
+
   return true;
 }
 

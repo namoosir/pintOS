@@ -176,10 +176,10 @@ page_fault (struct intr_frame *f)
   }
 
    struct supplemental_page_entry *p = page_lookup(pg_round_down(fault_addr), thread_current());
-   if (!user && p == NULL && !thread_current()->is_performing_syscall) { //THIS IS A PROBLEM
-      printf("%s\n", thread_current()->name);
-      exit(-1);
-   }
+   // if (!user && p == NULL && !thread_current()->is_performing_syscall) { //THIS IS A PROBLEM
+   //    printf("%s\n", thread_current()->name);
+   //    exit(-1);
+   // }
 
    if (fault_addr < (void*)(0x08048000)) {
       exit(-1);
@@ -187,7 +187,8 @@ page_fault (struct intr_frame *f)
 
    //grow stack
    if (p == NULL){
-      // TODO:: If not in page table then check for bad address
+      // printf("here\n");
+      // TODO: If not in page table then check for bad address
       if (fault_addr < (void*)((unsigned int*)esp - (unsigned int *)32) && !write) {
          exit(-1);
       }
@@ -224,12 +225,14 @@ page_fault (struct intr_frame *f)
       // sema_down(&file_modification_sema);
       //Read from file
       int amount_read = file_read_at (p->pg_data.file, kpage, p->pg_data.read_bytes, p->pg_data.ofs);
+      // sema_up(&file_modification_sema);
+
       if (amount_read != (int) p->pg_data.read_bytes) {
+         // printf("\nnot reading properly\n");
          exit(-1);
       }
       memset (kpage + p->pg_data.read_bytes, 0, 4096 - p->pg_data.read_bytes);
 
-      // sema_up(&file_modification_sema);
 
       //Install a new page
       if (!install_page(pg_round_down(p->user_virtual_address), kpage, p->writable)) {
@@ -239,8 +242,9 @@ page_fault (struct intr_frame *f)
       // p->frame = frame;
       // return;
    }
-     
-     if (p->page_flag == FROM_SWAPPED){
+
+   // swap table
+   if (p->page_flag == FROM_SWAPPED){
 
       struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, pg_round_down(p->user_virtual_address), p->writable, DONT_CREATE_SUP_PAGE_ENTRY);
       frame->page = p;
@@ -253,7 +257,7 @@ page_fault (struct intr_frame *f)
       }
       p->page_flag = FROM_FRAME_TABLE;
       
-     }
+   }
 
      if (write == 1 && not_present == 0) {
         exit(-1);
