@@ -26,10 +26,10 @@ frame_table_init(void)
 struct single_frame_entry*
 frame_add(enum palloc_flags flags, uint8_t *user_virtual_address, bool writable, enum create_sup_page_entry should_create_sup_page_entry) 
 {
-    // sema_down(&frame_sema);
+    sema_down(&frame_sema);
     struct single_frame_entry *frame = (struct single_frame_entry*) malloc(sizeof(struct single_frame_entry));
     if (frame == NULL) {
-        // sema_up(&frame_sema);
+        sema_up(&frame_sema);
         return NULL;
     }
 
@@ -54,7 +54,7 @@ frame_add(enum palloc_flags flags, uint8_t *user_virtual_address, bool writable,
             replacer_frame->page = NULL;
         }
         free(frame);
-        // sema_up(&frame_sema);
+        sema_up(&frame_sema);
         return replacer_frame;
     }
     
@@ -72,7 +72,7 @@ frame_add(enum palloc_flags flags, uint8_t *user_virtual_address, bool writable,
     frame->frame_address = page_addr;
 
     list_push_front(&frame_table, &frame->frame_elem);
-    // sema_up(&frame_sema);
+    sema_up(&frame_sema);
     return frame;
 }
 
@@ -96,7 +96,7 @@ frame_evict(void)
     to_evict->page->page_flag = FROM_SWAPPED;
 
     pagedir_clear_page(to_evict->holder->pagedir, to_evict->page->user_virtual_address);
-    read_write_from_block(to_evict, 0, WRITE);
+    block_read_write(to_evict, 0, WRITE);
     
     return to_evict;
 }
@@ -157,7 +157,6 @@ approximate_LRU(void)
             
             if(pagedir_is_accessed(f->holder->pagedir, f->page->user_virtual_address)){
                 //Set this frame to not accessed and move to the next frame
-                f->page->accessed = false;
                 pagedir_set_accessed (f->holder->pagedir, f->page->user_virtual_address, false);
                 //Increment the clock pointer
                 increment_clock_pointer();

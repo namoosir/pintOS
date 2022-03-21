@@ -19,8 +19,6 @@
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
-static struct semaphore swap_sema;
-
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
 
@@ -71,7 +69,6 @@ exception_init (void)
      We need to disable interrupts for page faults because the
      fault address is stored in CR2 and needs to be preserved. */
   intr_register_int (14, 0, INTR_OFF, page_fault, "#PF Page-Fault Exception");
-  sema_init(&swap_sema, 1);
 }
 
 /* Prints exception statistics. */
@@ -225,13 +222,14 @@ page_fault (struct intr_frame *f)
       // sema_down(&file_modification_sema);
       //Read from file
       int amount_read = file_read_at (p->pg_data.file, kpage, p->pg_data.read_bytes, p->pg_data.ofs);
-      // sema_up(&file_modification_sema);
-
+      
       if (amount_read != (int) p->pg_data.read_bytes) {
+         // sema_up(&file_modification_sema);
          // printf("\nnot reading properly\n");
          exit(-1);
       }
       memset (kpage + p->pg_data.read_bytes, 0, 4096 - p->pg_data.read_bytes);
+      // sema_up(&file_modification_sema);
 
 
       //Install a new page
@@ -249,7 +247,7 @@ page_fault (struct intr_frame *f)
       struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, pg_round_down(p->user_virtual_address), p->writable, DONT_CREATE_SUP_PAGE_ENTRY);
       frame->page = p;
 
-      read_write_from_block(frame, p->block_index, READ);
+      block_read_write(frame, p->block_index, READ);
       p->block_index = -1;
 
       if (!install_page(pg_round_down(p->user_virtual_address), frame->frame_address, p->writable)) {

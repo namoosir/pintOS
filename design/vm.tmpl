@@ -8,9 +8,8 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Rakshit Patel <rakshit.patel@mail.utoronto.ca>
+Nazmus Saqeeb <nazmus.saqeeb@mail.utoronto.ca>
 
 ---- PRELIMINARIES ----
 
@@ -30,10 +29,83 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+In frame.h:
+    /* Keeps track of all frames */
+    struct list frame_table; 
+
+    /* A flag to indicate if we need to create a new supplemental page table entry corresponding to the frame */
+    enum create_sup_page_entry{
+        CREATE_SUP_PAGE_ENTRY,          
+        DONT_CREATE_SUP_PAGE_ENTRY,
+    };
+
+    /* A struct to hold information for 1 frame */
+    struct single_frame_entry 
+    {
+        uint8_t *frame_address;                /* The kernel virtual address of the frame */
+        struct thread *holder;                 /* The thread that created the frame */
+        struct supplemental_page_entry *page;  /* The corresponding supplemental page entry */
+        struct list_elem frame_elem;           /* The list element for the frame table list */
+    };
+
+In frame.c:
+    static int clock_pointer = 0; /* The clock pointer for the clock algorithm */
+    static struct semaphore frame_sema; /* Semaphore for synchronizing the frame table */
+
+In page.h:
+    /* Flags to what type of memory a page refers to */
+    enum flag{
+        FROM_FRAME_TABLE,
+        FROM_SWAPPED,
+        FROM_FILE_SYSTEM,
+    };
+
+    /* Holds information about the file we are lazy loading */
+    struct page_data
+    {
+        struct file *file;                  /* The file we are lazy loading */
+        int32_t ofs;                        /* The offset of the file */
+        size_t read_bytes;                  /* The number of bytes we have read from the file */
+    };
+    /* A struct to hold information for 1 page */
+    struct supplemental_page_entry 
+    {
+        uint8_t* user_virtual_address;      /* The user virtual address of the page */
+        bool writable;                      /* Whether the page is writable */
+        struct page_data pg_data;           /* The file data corresponding to the page */
+        enum flag page_flag;                /* The flag to indicate if the page is from swap, file system or frame table */
+        int block_index;                    /* The index of the block in the swap file */
+        
+        struct hash_elem supplemental_page_elem; /* The hash element for the supplemental page table */
+    };
+
+In thread.h:
+    struct thread 
+    {
+        ...
+        bool is_performing_syscall;         /* A flag to indicate if the thread is performing a system call */
+        struct hash supplemental_page_hash_table; /* The supplemental page table for the thread */
+    }
+
 ---- ALGORITHMS ----
 
 >> A2: In a few paragraphs, describe your code for accessing the data
 >> stored in the SPT about a given page.
+
+We are using the hashtable data structure for the SPT. 
+The hash table has a constant look up time, so we can access the supplemental 
+page table entry in constant time. Each supplemental page entry is is inserted into 
+the hash table with key as the page rounded down user virtual address. This ensures that 
+all the keys have a address value that is at the top of a page.
+
+In order to access the data in the SPT, we have created a function:
+    page_lookup (void *address, struct thread* t)
+This function uses uses the hash_find function which looks in the hash table of the given thread 
+at the given address. The address that we send into the page_look needs to be page rounded down 
+because the hash table uses the rounded down addresses as the keys. This function returns the 
+supplemental page entry corresponding to the address and gives us access to the data that we store 
+in the supplemental_page_entry struct. 
+
 
 >> A3: How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame, or
@@ -44,10 +116,27 @@ FirstName LastName <email@domain.example>
 >> A4: When two user processes both need a new frame at the same time,
 >> how are races avoided?
 
+In order to avoid race conditions when creating new frames in the frame_add() function, 
+we use a semaphore (frame_sema) to make sure that only one thread can get a 
+frame at any given time. Furthermore, this also makes sure that the eviction is synchronized 
+because everytime we try to get a frame, we also perform the eviction algorithm if necessary.
+
 ---- RATIONALE ----
 
 >> A5: Why did you choose the data structure(s) that you did for
 >> representing virtual-to-physical mappings?
+
+For the SPT, we used a hash table because it is very efficient for 
+inserting and looking up (both are O(1)). We need this speed bacause everytime we lazy load or if
+there is a page fault, we need to do a lookup in the SPT and and possibility an insert when 
+growing the stack.
+
+For the Frame Table we used a list to store all the frames. When inserting a new frame, we always push to the 
+front of the list. This makes our frame add O(1) when we are not doing any eviction. However, when we are doing 
+eviction, we need to remove the frame according to the clock algorithm which can take O(n) time, where n is the 
+number of frames. We chose to use a list because of the efficiency when inserting and ease of implementation for the 
+clock algorithm to approximate the LRU algorithm.
+
 
                PAGING TO AND FROM DISK
                =======================
@@ -58,18 +147,86 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+In frame.h:
+    /* Keeps track of all frames */
+    struct list frame_table; 
+
+    /* A flag to indicate if we need to create a new supplemental page table entry corresponding to the frame */
+    enum create_sup_page_entry{
+        CREATE_SUP_PAGE_ENTRY,          
+        DONT_CREATE_SUP_PAGE_ENTRY,
+    };
+
+    /* A struct to hold information for 1 frame */
+    struct single_frame_entry 
+    {
+        uint8_t *frame_address;                /* The kernel virtual address of the frame */
+        struct thread *holder;                 /* The thread that created the frame */
+        struct supplemental_page_entry *page;  /* The corresponding supplemental page entry */
+        struct list_elem frame_elem;           /* The list element for the frame table list */
+    };
+
+In frame.c:
+    static int clock_pointer = 0; /* The clock pointer for the clock algorithm */
+    static struct semaphore frame_sema; /* Semaphore for synchronizing the frame table */
+
+In swap.h:
+    /* A flag to indidcate if we need to read or write from the block */
+    enum read_or_write_flag{
+        READ,
+        WRITE,
+    };
+
+In swap.c:
+    static struct block* swap_block;            /* The block we are using for swapping */
+    static struct bitmap* occupied_swap_bitmap; /* The bitmap to indicate which blocks are occupied */
+    static struct semaphore read_write_sema;    /* Semaphore to synchronize swapping */
+
 ---- ALGORITHMS ----
 
 >> B2: When a frame is required but none is free, some frame must be
 >> evicted.  Describe your code for choosing a frame to evict.
 
+To chose a frame to evict, we use the clock algorithm. We keep track of the clock pointer 
+which behaves like an index for our frame_table list. At the beginning this index refers to the first 
+item in the list. When there is a need to evict a frame, we traverse the frame_table list until we 
+find a frame that is not accessed (using the pagedir_is_accessed function). Also, while traversing 
+the list, if there is a frame that is accessed then we set the accessed bit to false.
+Once we find the frame that is not accessed, we check if it is dirty, if it is then we update the 
+data for the corresponding pages file and set its dirty bit to false then return the frame. 
+Otherwise if it is not dirty we just return the frame to evict its data.
+
+Once we found the frame to evict, we write its data to the disk and clear the page, then 
+give the requesting process the frame that was evicted for its own use.
+
+NOTE: The frame entry is not removed from the list when evicting. We simply change the member varibles 
+      for the new process. This ensure the frame remains in the same spot on the list (this is needed for the clock algorithm).
+
 >> B3: When a process P obtains a frame that was previously used by a
 >> process Q, how do you adjust the page table (and any other data
 >> structures) to reflect the frame Q no longer has?
 
+We adjust the suplementery page table for Q, by setting page_flag to FROM_SWAPPED. 
+This flag indicates that the data corresponding to that page enrty is in the swap block.
+So, when a page fault happens we simply read the data from the swap block and write it to the page.
+
+We also adjust the occupied_swap_bitmap by setting the 8 bits corresponding to the block to true. This 
+indicates that the portion of the swap block is now occupied.
+
+As mentioned in the NOTE of question B2, we do not remove the frame from the list when evicting, we simply change its member variables.
+
+
 >> B4: Explain your heuristic for deciding whether a page fault for an
 >> invalid virtual address should cause the stack to be extended into
 >> the page that faulted.
+
+The heuristic is to check whether or not there is already a supplemental page entry for the fault address that caused the page fault. 
+Since we only assign 1 frame and 1 supplemental entry when setting up the processes stack, we will not have any more page entries.
+So, if our page_lookup function returns NULL, then we know that there is no supplemental page entry for the fault address and therefor we 
+need to extend the stack.
+
+We also check if the page fault occured 32 bytes below the stack pointer. If so, we can procceed to extend the stack.
+Otherwise, that fault was not cause by stack growth because the PUSHA instruction only pushes 32 bytes onto the stack.
 
 ---- SYNCHRONIZATION ----
 
@@ -78,21 +235,42 @@ FirstName LastName <email@domain.example>
 >> textbook for an explanation of the necessary conditions for
 >> deadlock.)
 
+Since each supplemental page table is independent for each process and only being modified by the owner process.
+This ensures that there are no deadlocks because the hash table resource is not shared.
+We also avoid deadlocks by ensuring that no two functions are mutually calling each other and trying to down or up a semaphore.
+This ensures that no two processes are trying to access the same resource at the same time.
+
+
 >> B6: A page fault in process P can cause another process Q's frame
 >> to be evicted.  How do you ensure that Q cannot access or modify
 >> the page during the eviction process?  How do you avoid a race
 >> between P evicting Q's frame and Q faulting the page back in?
+
+We put a semaphore in the frame_add() function. This semaphore also makes sure the eviction function is 
+in the critical section. This means that until the entire eviction process is done, no other process can come to 
+the foreground and access the page.
 
 >> B7: Suppose a page fault in process P causes a page to be read from
 >> the file system or swap.  How do you ensure that a second process Q
 >> cannot interfere by e.g. attempting to evict the frame while it is
 >> still being read in?
 
+When ever we preform a file read from the filesystem, it is always protected by 
+a semaphore (file_modification_sema). This ensures that no other process Q can start 
+eviction or interfere in any other way while we are reading from the file.
+
+A similar construct is used when reading from the swap. We use a semaphore to block other threads 
+from accessing the swap block while we are reading or writing from it and since eviction requires 
+writing to the block, the eviction writing must wait until the read is completed.
+
+
 >> B8: Explain how you handle access to paged-out pages that occur
 >> during system calls.  Do you use page faults to bring in pages (as
 >> in user programs), or do you have a mechanism for "locking" frames
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
+
+
 
 ---- RATIONALE ----
 
@@ -103,6 +281,12 @@ FirstName LastName <email@domain.example>
 >> where your design falls along this continuum and why you chose to
 >> design it this way.
 
+We chose to use multiple semaphores for the VM system. This allows us to have a decent amount of 
+parallelism. Our design uses a single semphore (file_modification_sema) for all file system related 
+operations. A single semaphore for swap related operations and a single semaphore for frame table
+Using a limited amount of semaphores make our system less prone to synchronization problems and deadlocks. 
+However, it also allows for some parallelism.
+
              MEMORY MAPPED FILES
              ===================
 
@@ -111,6 +295,32 @@ FirstName LastName <email@domain.example>
 >> C1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+
+In syscall.h:
+    struct semaphore file_modification_sema; /* Semaphore to synchronize file related functions */
+
+    /* A struct to hold information for 1 mapped file */
+    struct mapping_information
+    {
+        uint8_t *start_addr;    /* The start address of the mapped file */
+        uint8_t *end_addr;      /* The end address of the mapped file */
+        int mapping_id;         /* The mapping id of the mapped file */
+        struct file *file;      /* The file that is mapped */
+        int file_size;          /* The size of the file */
+        struct list_elem map_elem; /* The list element for the mapping info list */
+    };
+
+In thread.h:
+    struct thread 
+    {
+        ...
+        #ifdef USERPROG
+            ...
+            struct list mapping_info_list;  /* A list of mapping info for the thread */
+            int mapping_count;              /* The number of mapped files for the thread */
+        #endif
+        ...
+    }
 
 ---- ALGORITHMS ----
 

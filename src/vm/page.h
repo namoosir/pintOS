@@ -10,7 +10,6 @@ enum flag{
     FROM_FRAME_TABLE,
     FROM_SWAPPED,
     FROM_FILE_SYSTEM,
-    ALL_ZERO,
 };
 struct page_data
 {
@@ -22,9 +21,6 @@ struct page_data
 struct supplemental_page_entry 
 {
     uint8_t* user_virtual_address;
-    uint64_t time_accessed;
-    bool dirty;
-    bool accessed;
     bool writable;
     struct page_data pg_data;
     // Flag to indicate swaped out or filemapped page

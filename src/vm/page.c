@@ -49,9 +49,6 @@ new_supplemental_page_entry(int page_flag, uint8_t* user_virtual_address, bool w
   }
   
   s->user_virtual_address = user_virtual_address;
-  s->time_accessed = timer_ticks();
-  s->dirty = pagedir_is_dirty(thread_current()->pagedir, user_virtual_address);
-  s->accessed = pagedir_is_accessed(thread_current()->pagedir, user_virtual_address);
   s->writable = writable;
   s->page_flag = page_flag;
   s->pg_data = pg_data;
