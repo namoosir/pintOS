@@ -12,9 +12,10 @@
 #include "threads/vaddr.h"
 #include "stdio.h"
 
-static int clock_pointer = 0;
-static struct semaphore frame_sema;
+static int clock_pointer = 0; //Pointer for clock algorithm
+static struct semaphore frame_sema; //Semaphore for frame table
 
+/* Initialize frame table */
 void
 frame_table_init(void)
 {
@@ -23,6 +24,13 @@ frame_table_init(void)
     sema_init(&frame_sema, 1);
 }
 
+
+/* 
+    Creates a new frame entry and adds it to the frame table.
+    If the create_sup_page_entry is set to CREATE_SUP_PAGE_ENTRY, then a supplemental page entry is created as well.
+    Also performs eviction if there is not enough memory.
+    Returns a pointer to the new frame entry.
+*/
 struct single_frame_entry*
 frame_add(enum palloc_flags flags, uint8_t *user_virtual_address, bool writable, enum create_sup_page_entry should_create_sup_page_entry) 
 {
@@ -35,11 +43,10 @@ frame_add(enum palloc_flags flags, uint8_t *user_virtual_address, bool writable,
 
     uint8_t *page_addr = palloc_get_page (flags);
 
+    // Evicts a frame if there is not enough memory
     if (page_addr == NULL)
     {
-        // printf("NEED TO SWAP\n");
-        struct single_frame_entry *replacer_frame = frame_evict();
-        
+        struct single_frame_entry *replacer_frame = frame_evict();   
         replacer_frame->holder = thread_current();
         if(should_create_sup_page_entry == CREATE_SUP_PAGE_ENTRY)
         {
@@ -58,6 +65,7 @@ frame_add(enum palloc_flags flags, uint8_t *user_virtual_address, bool writable,
         return replacer_frame;
     }
     
+    // Creates a new frame without eviction
     if(should_create_sup_page_entry == CREATE_SUP_PAGE_ENTRY){
         struct page_data pg_data;
         pg_data.file = NULL;
@@ -71,11 +79,16 @@ frame_add(enum palloc_flags flags, uint8_t *user_virtual_address, bool writable,
     frame->holder = thread_current();
     frame->frame_address = page_addr;
 
+    // Add the new frame to the frame table
     list_push_front(&frame_table, &frame->frame_elem);
     sema_up(&frame_sema);
     return frame;
 }
 
+/*
+    Removes a frame from the frame table.
+    Clears and frees the frame's corresponding page. 
+*/
 void
 frame_remove(struct single_frame_entry *frame)
 {
@@ -89,6 +102,11 @@ frame_remove(struct single_frame_entry *frame)
     }
 }
 
+/*
+    Finds and clears the frame that needs to be evicted,
+    and writes its page contents to the swap.
+    Returns the frame that was evicted.
+*/
 struct single_frame_entry*
 frame_evict(void)
 {
@@ -101,7 +119,9 @@ frame_evict(void)
     return to_evict;
 }
 
-//Given a list get the item at that index
+/*
+    Finds the frame at the given index in the frame_table
+*/
 struct single_frame_entry*
 get_frame_at_index(int index)
 {
@@ -121,6 +141,10 @@ get_frame_at_index(int index)
     return NULL;
 }
 
+/* 
+    Moves the clock pointer up by 1, 
+    and wraps around if it reaches the end of the list. 
+*/
 void
 increment_clock_pointer(void)
 {
@@ -130,24 +154,17 @@ increment_clock_pointer(void)
     }
 }
 
+/* 
+    This function apporximates the LRU by using the clock algorithm.
+    The clock pointer is used as an index for the frame_table list, we 
+    keep going around the list until we find a non accessed frame.
+    If this frame is dirty then we write back to the file.
+    The frame that we find is returned. 
+*/
+
 struct single_frame_entry* 
 approximate_LRU(void)
 {
-    // int random_frame_number = timer_ticks() % list_size(&frame_table);
-    // int i = 0;
-    
-    // for (struct list_elem *e = list_begin (&frame_table); e != list_end (&frame_table);
-    //       e = list_next (e))
-    // {
-    //     if (i == random_frame_number){
-    //         struct single_frame_entry* f = list_entry (e, struct single_frame_entry, frame_elem);
-    //         return f;
-    //     }
-    //     i++;
-    // }
-    // return NULL;
-
-
     struct single_frame_entry *eviction_frame = NULL;
     while (eviction_frame == NULL)
     {

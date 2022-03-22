@@ -10,6 +10,9 @@ static struct block* swap_block;
 static struct bitmap* occupied_swap_bitmap;
 static struct semaphore read_write_sema;
 
+/*
+    Initializes swap block, bitmap and semaphore (used for synchronization).
+*/
 void 
 swap_init(void)
 {
@@ -19,6 +22,10 @@ swap_init(void)
     bitmap_set_all(occupied_swap_bitmap, false);
 }
 
+/* 
+    Depending on the rw_flag, either reads or writes a block from the swap block.
+    We use a bitmap to identify used and unused swap indices.
+*/
 void
 block_read_write(struct single_frame_entry* frame, int index, enum read_or_write_flag rw_flag)
 {

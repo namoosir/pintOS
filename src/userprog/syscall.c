@@ -20,16 +20,14 @@
 
 static void syscall_handler (struct intr_frame *);
 void exit (int status);
-// static struct semaphore file_modification_sema; /* semaphore for other file operations */
+
 static bool sema_initialized; /*A flag to initialize semaphores only once */
-static struct semaphore execa_sema;
 
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   sema_init(&file_modification_sema, 1);
-  sema_init(&execa_sema, 1);
 }
 
 /* Reads a byte at user virtual address UADDR.
@@ -57,7 +55,9 @@ get_user (const uint8_t *uaddr)
 //   return error_code != -1;
 // }
 
-/*Hash action function to free elements of a hashtable*/
+/*
+  Hash action function to free elements of a hashtable
+*/
 void free_pages_in_hash (struct hash_elem *he, void *aux UNUSED)
 {
   struct supplemental_page_entry *x =  hash_entry(he, struct supplemental_page_entry, supplemental_page_elem);
@@ -75,7 +75,10 @@ void free_pages_in_hash (struct hash_elem *he, void *aux UNUSED)
   // page_remove(x);
 }
 
-/*Performs memory unmapping*/
+/*
+  Performs memory unmapping, by writing back to the file if the memory was modified
+  and removing the mapping from the supplemental page table.
+*/
 void perform_munmap(int map_id)
 {
   int map_exists = 0;
@@ -98,12 +101,16 @@ void perform_munmap(int map_id)
     //Prevent other tasks when writing
     sema_down(&file_modification_sema);
 
-    // list_remove(&map_info->map_elem);
+    
 
     int total_pages = (map_info->end_addr - map_info->start_addr) / PGSIZE;
     int size = map_info->file_size;
     int offset = 0;
 
+    /* 
+      Writes the contents in memory back to the file if that page was dirty
+      And removes the page from the supplemental page table.
+    */
     for (int i = 0; i < total_pages; i++) 
     {
       uint8_t *temp_page_addr = map_info->start_addr + i*PGSIZE;
@@ -126,17 +133,13 @@ void perform_munmap(int map_id)
   and free all memory allocated by the process.
 
   Saves the exit status in its parent process.
+
+  Unmapping all the files that the process has mapped.
 */
 void
 exit (int status)
 {
   printf("%s: exit(%d)\n", thread_current()->name, status);  
-
-  // struct file *file1 = filesys_open ("child-sort");
-  // struct file *file2 = filesys_open ("child-sort");
-
-
-  // printf("file1 %p, file2 %p\n", file1, file2);
 
   //close any open file descriptors
   for (int i = 2; i < MAX_FILE_DESCRIPTORS; i++)
@@ -161,7 +164,7 @@ exit (int status)
 
   thread_current()->parent->exit_status[child_process_index] = status;
 
-  //TODO: FIX SO THAT ALL MAPPED ELEMENTS ARE UNMAPPED
+  /* unmap all files that the process has mapped */
   for (struct list_elem *e = list_begin (&thread_current()->mapping_info_list); e != list_end (&thread_current()->mapping_info_list);
           e = list_next (e))
   {
@@ -169,7 +172,7 @@ exit (int status)
     perform_munmap(map_info->mapping_id);
   }
 
-  //FREE MAPPING IDS
+  /* free the items in the mapping_info_list */
   while (!list_empty(&thread_current()->mapping_info_list))
   {
     struct list_elem *e = list_pop_front(&thread_current()->mapping_info_list);
@@ -177,10 +180,10 @@ exit (int status)
     free(map_info);
   }
 
-  //TODO: free hash table entries
+  /* Free items in the supplemental_page_hash_table */
   hash_action_func *free_pages = free_pages_in_hash;
   hash_apply(&thread_current()->supplemental_page_hash_table, free_pages);
-  // hash_destroy(&thread_current()->supplemental_page_hash_table, free_pages);
+
   //exit from the thread
   thread_exit ();
 }
@@ -209,10 +212,8 @@ static bool
 bad_ptr_arg(int arg)
 {
   if ((const char*)arg == NULL || 
-        (void*)arg <= LOWEST_ADDR || is_kernel_vaddr((void *)arg) /* ||
-         pagedir_get_page(thread_current ()->pagedir, (void*)arg) == NULL */ )
+        (void*)arg <= LOWEST_ADDR || is_kernel_vaddr((void *)arg))
   {
-    // printf("first: %d, second: %d, third: %d\n", (const char*)arg == NULL, is_kernel_vaddr((void *)arg), pagedir_get_page(thread_current ()->pagedir, (void*)arg) == NULL);
     return true;
   }
   return false;
@@ -498,18 +499,14 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if (syscall_number == SYS_EXEC)
   {
-    // sema_down(&execa_sema);
     if (bad_ptr_arg(args[0]))
     {
       exit(-1);
     }
     
-    // sema_down(&(thread_current ()->exec_sema));
-
     tid_t child_pid = process_execute ((const char*) args[0]);
 
     f->eax = child_pid;
-    // sema_up(&execa_sema);
   }
   else if (syscall_number == SYS_WAIT) 
   {
@@ -517,7 +514,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if (syscall_number == SYS_MMAP)
   {
-    // printf("mapping\n");
+    
     int file_size = 0;
     if (args[0] != 0 && args[0] != 1 && args[0] < MAX_FILE_DESCRIPTORS && args[0] > 0) 
     {
@@ -555,6 +552,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         
         new_mapping->start_addr = upage;
 
+        /* Open the given file. */
         sema_down(&file_modification_sema);
         struct file* file = file_reopen(thread_current()->fd_array[args[0]]);
         sema_up(&file_modification_sema);
@@ -565,6 +563,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         file_seek (file, ofs);
         sema_up(&file_modification_sema);
 
+        /* Lazy load suplemental pages for the file. */
         while (read_bytes > 0 || zero_bytes > 0)
         {
           size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
@@ -581,7 +580,7 @@ syscall_handler (struct intr_frame *f UNUSED)
           zero_bytes -= page_zero_bytes;
           upage += PGSIZE;
         }
-
+        /* set contents of the mapping struct and add it to the list */
         new_mapping->end_addr = upage;
         new_mapping->mapping_id = thread_current()->mapping_count;
         new_mapping->file_size = file_size;
@@ -606,10 +605,12 @@ syscall_handler (struct intr_frame *f UNUSED)
   {
     perform_munmap(args[0]);
 
-    //FREE CORRECT ELEMENT
+
     int map_exists = 0;
     struct mapping_information *map_info;
-
+    /*
+      Find the correct mapped item corresponding to the mapping id
+    */
     for (struct list_elem *e = list_begin (&thread_current()->mapping_info_list); e != list_end (&thread_current()->mapping_info_list);
             e = list_next (e))
     {
@@ -620,11 +621,13 @@ syscall_handler (struct intr_frame *f UNUSED)
         break;
       }
     }
-
+    /*
+      Free's the mapped item from the mapping_info_list
+    */
     if (map_exists) {
       list_remove(&map_info->map_elem);
       free(map_info);
     }
   }
-  // free(args);
+
 }

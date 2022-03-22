@@ -49,7 +49,6 @@ process_execute (const char *file_name)
   if (fn_copy == NULL) 
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-  // printf("inside process execute %s\n", fn_copy);
 
   /* Get the name of the userprog */
   char *raw_name = (char *)malloc ((strlen (file_name) + 1) * sizeof (char));
@@ -74,8 +73,6 @@ process_execute (const char *file_name)
   struct thread *cur_parent = thread_current();
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (actual_name, PRI_DEFAULT, start_process, fn_copy);
-  
-  // printf("tid: %d\n", tid);
 
   for (int i = 0; i < MAX_CHILDREN; i++)
   {
@@ -193,7 +190,6 @@ process_exit (void)
   uint32_t *pd;
 
   // executable_list_idx--;
-  // printf("callled exit %d\n", cur->tid);
   sema_down(&executable_list_sema);
   file_close(executable_list[cur->tid]);
   executable_list[cur->tid] = NULL;
@@ -336,8 +332,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   bool success = false;
   int i;
 
-  // printf("beginning of load %s\n", file_name);
-
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
@@ -366,11 +360,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file = filesys_open (actual_name);
   sema_up(&file_modification_sema);
 
-  // printf("ARRAY AFTER OPEN\n");
-  // for(int i = 3; i < 10; i++) {
-  //   printf("i: %d, FILE: %p, exec_idx: %d\n", i, executable_list[i], executable_list_idx);
-  // }
-
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", actual_name);
@@ -394,11 +383,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   executable_list[executable_list_idx] = file;
   sema_up(&executable_list_sema);
 
-  // printf("file ptr %p\n", file);
-
   file_deny_write(file);
-
-  // printf("after deny write %s size: %d \n", actual_name, file_length(file));
 
 
   /* Read program headers. */
@@ -407,29 +392,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
     {
       struct Elf32_Phdr phdr;
 
-      // printf("in loop %s size: %d \n", actual_name, file_length(file));
-
-
       if (file_ofs < 0 || file_ofs > file_length (file)) {
-        // printf("offset fail offset: %d, file_size: %d\n", file_ofs, file_length(file));
-        // printf("inside load %s\n", file_name);
         goto done;
       }
 
-      // printf("after offset check %s size: %d \n", actual_name, file_length(file));
-
       file_seek (file, file_ofs);
-
-      // printf("after seeking %s size: %d \n", actual_name, file_length(file));
 
       if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
         goto done;
-
-      // printf("after weird read check %s size: %d \n", actual_name, file_length(file));
       
       file_ofs += sizeof phdr;
-
-      // printf("before switch statement %s size: %d \n", actual_name, file_length(file));
 
       switch (phdr.p_type) 
         {
@@ -445,7 +417,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
         case PT_SHLIB:
           goto done;
         case PT_LOAD:
-          // printf("before validate segment size: %d \n", file_length(file));
 
           if (validate_segment (&phdr, file)) 
             {
@@ -469,7 +440,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
-              // printf("before load segment size: %d \n", file_length(file));
               
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
@@ -480,15 +450,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
           break;
         }
     }
-
-  // printf("after loop %s size: %d \n", actual_name, file_length(file));
-  
-
   /* Set up stack. */
   if (!setup_stack (esp, file_name))
     goto done;
-
-  // printf("after stack %s size: %d \n", actual_name, file_length(file));
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -561,8 +525,11 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 
         - ZERO_BYTES bytes at UPAGE + READ_BYTES must be zeroed.
 
-   The pages initialized by this function must be writable by the
-   user process if WRITABLE is true, read-only otherwise.
+   This function creates new suplementary page table entries for
+   the pages the will need to be initialized later. This entry will 
+   contain information about how the page needs to be initialized.
+   i.e) The page must be writable by the user process if WRITABLE is true, 
+        read-only otherwise.
 
    Return true if successful, false if a memory allocation error
    or disk read error occurs. */
@@ -573,8 +540,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
-
-  // printf("inside load segment size: %d \n", file_length(file));
   
   file_seek (file, ofs);
   while (read_bytes > 0 || zero_bytes > 0) 
@@ -586,36 +551,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       
-      //Print debuging info
-      // printf("load_segment??? file: %p ofs: %d page_read_bytes: %d\n", file, ofs, page_read_bytes);
-
+  
+      /* Create suplemental page entries so we can lazy load on page faults */
       struct page_data pg_data = save_page_data(file, ofs, page_read_bytes);
-      
-     
       struct supplemental_page_entry *s = new_supplemental_page_entry(FROM_FILE_SYSTEM, pg_round_down(upage), writable, pg_data);
       if (s == NULL){
         return false;
       }
-      /* Get a page of memory. */
-      // uint8_t *kpage = frame_add(PAL_USER, upage, writable, CREATE_SUP_PAGE_ENTRY);
-      // uint8_t *kpage = palloc_get_page (PAL_USER);
-      // if (kpage == NULL)
-      //   return false;
-
-      // /* Load this page. */
-      // if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-      //   {
-      //     palloc_free_page (kpage);
-      //     return false; 
-      //   }
-      // memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-      // /* Add the page to the process's address space. */
-      // if (!install_page (upage, kpage, writable)) 
-      //   {
-      //     palloc_free_page (kpage);
-      //     return false; 
-      //   }
 
       /* Advance. */
       ofs += page_read_bytes;
@@ -742,11 +684,11 @@ populate_stack (void **esp, const char *file_name)
 static bool
 setup_stack (void **esp, const char *file_name) 
 {
-  uint8_t *kpage;
   bool success = false;
   
+  /* Create new frame (non-lazily) for the first time when we setup the stack */
   struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, ((uint8_t *) PHYS_BASE) - PGSIZE, true, CREATE_SUP_PAGE_ENTRY);
-  // kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+
   if (frame->frame_address != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, frame->frame_address, true);
@@ -756,7 +698,7 @@ setup_stack (void **esp, const char *file_name)
         populate_stack(esp, file_name);
       }
       else
-        palloc_free_page (kpage);
+        page_remove(frame->page);
     }
   return success;
 }

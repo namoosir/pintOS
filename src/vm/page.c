@@ -7,6 +7,9 @@
 #include "threads/vaddr.h"
 #include "vm/frame.h"
 
+/*
+  Comparator to insert the suplemental page entry into the hash table based on user_virtual_address.
+*/
 bool
 page_table_hash_comparator(const struct hash_elem *a, const struct hash_elem *b, void* aux UNUSED) 
 {
@@ -40,6 +43,10 @@ page_lookup (void *address, struct thread* t)
   return e != NULL ? hash_entry (e, struct supplemental_page_entry, supplemental_page_elem) : NULL;
 }
 
+/*
+  Creates a new supplemental page entry based on the given parameters.
+  We insert this entry into the supplemental_page_hash_table.
+*/
 struct supplemental_page_entry* 
 new_supplemental_page_entry(int page_flag, uint8_t* user_virtual_address, bool writable, struct page_data pg_data) 
 {
@@ -47,7 +54,7 @@ new_supplemental_page_entry(int page_flag, uint8_t* user_virtual_address, bool w
   if(s == NULL){
     return NULL;
   }
-  
+  // Set member variables
   s->user_virtual_address = user_virtual_address;
   s->writable = writable;
   s->page_flag = page_flag;
@@ -62,6 +69,10 @@ new_supplemental_page_entry(int page_flag, uint8_t* user_virtual_address, bool w
   return s;
 }
 
+/*
+  Saves the file data in the supplemental page entry.
+  So, we can later on read the data from the file.
+*/
 struct page_data
 save_page_data(struct file *file, int32_t ofs, uint32_t read_bytes)
 {
@@ -72,6 +83,10 @@ save_page_data(struct file *file, int32_t ofs, uint32_t read_bytes)
   return p;
 }
 
+/*
+  Removes the supplemental page entry from the supplemental_page_hash_table
+  and its corresponding frame from the frame table.
+*/
 void
 page_remove(struct supplemental_page_entry *s)
 {

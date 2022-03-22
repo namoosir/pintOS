@@ -129,7 +129,25 @@ kill (struct intr_frame *f)
    example code here shows how to parse that information.  You
    can find more information about both of these in the
    description of "Interrupt 14--Page Fault Exception (#PF)" in
-   [IA32-v3a] section 5.15 "Exception and Interrupt Reference". */
+   [IA32-v3a] section 5.15 "Exception and Interrupt Reference". 
+   
+   This handler takes care of 3 cases:
+   1. Stack Growth
+   2. Loading from file system
+   3. Loading from swap block
+
+   If there is no supplemental page entry, then we grow the stack by 
+   allocating a new frame.
+
+   If a suplemental page entry has already been created then we 
+   need to lazy load the contents based on whether the page is 
+   from the file system or from the swap block. If the page is 
+   from the file system then we just need to read from the file
+   and allocate a new frame.
+   If the page is from the swap block then we need to read from 
+   the swap block and then write to the frame address.
+   
+*/
 static void
 page_fault (struct intr_frame *f) 
 {
@@ -159,38 +177,28 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  //If userprog needs more than 1 page
-   // sema_down(&swap_sema);
-
-  //1. Data has 
-  //check if data has been swapped out, then we need to swap it in
-  //if it has not been swapped out, and its from the filesystem then we need to read it back
-  //if not, swap out data then grow stack
   void* esp = f->esp;
   
-  if (fault_addr == NULL) {
+   if (fault_addr == NULL) 
+   {
      exit(-1);
-  }
+   }
 
    struct supplemental_page_entry *p = page_lookup(pg_round_down(fault_addr), thread_current());
-   // if (!user && p == NULL && !thread_current()->is_performing_syscall) { //THIS IS A PROBLEM
-   //    printf("%s\n", thread_current()->name);
-   //    exit(-1);
-   // }
 
+   // Make sure fault is not below the absolute minimum of the stack
    if (fault_addr < (void*)(0x08048000)) {
       exit(-1);
    }
 
    //grow stack
    if (p == NULL){
-      // printf("here\n");
-      // TODO: If not in page table then check for bad address
+
+      // Make sure fault is no more than 32 bytes away from stack pointer
       if (fault_addr < (void*)((unsigned int*)esp - (unsigned int *)32) && !write) {
          exit(-1);
       }
 
-      // printf("here4\n");
       //Create a new frame for a page to grow the stack
       struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, pg_round_down(fault_addr), true, CREATE_SUP_PAGE_ENTRY);
       
@@ -199,49 +207,35 @@ page_fault (struct intr_frame *f)
          exit(-1);
       }
 
-      // if (pagedir_get_page(thread_current ()->pagedir, (void*)fault_addr) == NULL) exit(-1);
-
       //Install the page
       if (!install_page(pg_round_down(frame->page->user_virtual_address), frame->frame_address, frame->page->writable)) {
          exit(-1);
       }
-   //   printf("7here\n");
-      // sema_up(&swap_sema);
-
       return;
    }
-      
+   // We need to read from filesys
    if (p->page_flag == FROM_FILE_SYSTEM){
-      
-      //   printf("here5\n");
       //Create frame entry without creating a supplemental page entry
       struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, pg_round_down(p->user_virtual_address), p->writable, DONT_CREATE_SUP_PAGE_ENTRY);
       uint8_t *kpage = frame->frame_address;
       frame->page = p;
 
-      // sema_down(&file_modification_sema);
       //Read from file
       int amount_read = file_read_at (p->pg_data.file, kpage, p->pg_data.read_bytes, p->pg_data.ofs);
       
       if (amount_read != (int) p->pg_data.read_bytes) {
-         // sema_up(&file_modification_sema);
-         // printf("\nnot reading properly\n");
          exit(-1);
       }
       memset (kpage + p->pg_data.read_bytes, 0, 4096 - p->pg_data.read_bytes);
-      // sema_up(&file_modification_sema);
-
 
       //Install a new page
       if (!install_page(pg_round_down(p->user_virtual_address), kpage, p->writable)) {
          exit(-1);
       }
       p->page_flag = FROM_FRAME_TABLE;
-      // p->frame = frame;
-      // return;
    }
 
-   // swap table
+   // We need to read from swap table
    if (p->page_flag == FROM_SWAPPED){
 
       struct single_frame_entry *frame = frame_add(PAL_USER | PAL_ZERO, pg_round_down(p->user_virtual_address), p->writable, DONT_CREATE_SUP_PAGE_ENTRY);
@@ -257,17 +251,12 @@ page_fault (struct intr_frame *f)
       
    }
 
-     if (write == 1 && not_present == 0) {
-        exit(-1);
-     }
-   // Filsystem, if mem mapped file then we write data back to file
-   // If the data is not swapped out then we write it back to the file
-   // Swap Table -> need to swap back in
-   //   uint8_t* kpage = frame_add(PAL_USER | PAL_ZERO, p->user_virtual_address, p->writable);
-      // sema_up(&swap_sema);
+   // Exit if writing to read only page
+   if (write == 1 && not_present == 0) {
+      exit(-1);
+   }
      
-     return;
-//   }
+   return;
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
