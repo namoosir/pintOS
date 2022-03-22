@@ -94,14 +94,14 @@ In thread.h:
 
 We are using the hashtable data structure for the SPT. 
 The hash table has a constant look up time, so we can access the supplemental 
-page table entry in constant time. Each supplemental page entry is is inserted into 
+page table entry in constant time. Each supplemental page entry is inserted into 
 the hash table with key as the page rounded down user virtual address. This ensures that 
-all the keys have a address value that is at the top of a page.
+all the keys have an address value that is at the top of a page.
 
 In order to access the data in the SPT, we have created a function:
     page_lookup (void *address, struct thread* t)
 This function uses uses the hash_find function which looks in the hash table of the given thread 
-at the given address. The address that we send into the page_look needs to be page rounded down 
+at the given address. The address that we send into the page_lookup needs to be page rounded down 
 because the hash table uses the rounded down addresses as the keys. This function returns the 
 supplemental page entry corresponding to the address and gives us access to the data that we store 
 in the supplemental_page_entry struct. 
@@ -110,6 +110,11 @@ in the supplemental_page_entry struct.
 >> A3: How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame, or
 >> alternatively how do you avoid the issue?
+
+When performing eviction of a frame, we always check if its dirty or not. If it is dirty, then 
+we will write the data back to the file before swapping it out. We also set the accessed bit, we use the clock 
+alogrithm to set its value to false. This ensures that the accessed and dirty bits is always correct for all 
+of the given pages.
 
 ---- SYNCHRONIZATION ----
 
@@ -271,6 +276,10 @@ writing to the block, the eviction writing must wait until the read is completed
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
 
+We use page faults to bring in pages. We set a flag for a given process
+when it is performing a syscall. Given this flag we know to allocate
+a new page for this process with lots of error checking to make sure
+it is a proper access.
 
 
 ---- RATIONALE ----
@@ -329,8 +338,21 @@ In thread.h:
 >> memory subsystem.  Explain how the page fault and eviction
 >> processes differ between swap pages and other pages.
 
+Memory mapped files use a similar process to regular page fault and
+eviction with the exceptions that we create an entry in the mapping_info_list
+to store information such as the mapping id, the start and end page addresses
+being used to store the file contents, etc, and forcefully allocate contiguous 
+memory, swapping out if needed. During eviction, if any frame from a single mapping
+is selected to be swapped out, we swap out all the frames contiguously to the original 
+file so that the entire file content is preserved in order writing any dirty pages back to the
+file. During reclamation, we must also reclaim all the pages for a single mapping.
+
 >> C3: Explain how you determine whether a new file mapping overlaps
 >> any existing segment.
+
+We use the frame table and the supplemental page table to ensure that 
+the new file mapping is working with newly allocated memory which does
+not overlap with any existing segment.
 
 ---- RATIONALE ----
 
@@ -340,6 +362,11 @@ In thread.h:
 >> that much of their implementation can be shared.  Explain why your
 >> implementation either does or does not share much of the code for
 >> the two situations.
+
+Our implementation shares a lot of the code due to the similarities. However
+there are some differences in place due to the requirement for the memory to
+be contiguous so that data is preserved correctly. Due to this, we have
+some changes from the data demand-paged from the executables.
 
                SURVEY QUESTIONS
                ================
