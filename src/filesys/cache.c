@@ -4,13 +4,15 @@
 #include "lib/string.h"
 #include <stdio.h>
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
+#include "threads/thread.h"
 #include "userprog/syscall.h"
 
 #define MAX_CACHE_SIZE 64
 #define LOWEST_ADDR ((void *) 0x08048000)
 
 static struct cache_entry cache[MAX_CACHE_SIZE];
-
+static int cache_clock_pointer = 0;
 static int used_cache_size;
 
 void 
@@ -106,6 +108,30 @@ cache_write_back_all(void)
 }
 
 void
+evict(void)
+{
+    //Evict the cache entry using the clock algorithm
+    sema_down(&buffer_cache_sema);
+    // printf("down 105\n");
+
+    while(cache[cache_clock_pointer].accessed == 1)
+    {
+        cache[cache_clock_pointer].accessed = 0;
+        cache_clock_pointer = (cache_clock_pointer + 1) % MAX_CACHE_SIZE;
+    }
+    if(cache[cache_clock_pointer].dirty)
+    {
+        block_write(fs_device, cache[cache_clock_pointer].sector, cache[cache_clock_pointer].bounce_buffer);
+        cache[cache_clock_pointer].dirty = 0;
+    }
+    memset(cache[cache_clock_pointer].bounce_buffer, 0, BLOCK_SECTOR_SIZE);
+    cache[cache_clock_pointer].in_use = 0;
+    cache[cache_clock_pointer].sector = -1;
+
+    sema_up(&buffer_cache_sema);
+}
+
+void
 cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int sector_ofs, int chunk_size, enum add_flag flag)
 {
     static int x;
@@ -148,29 +174,8 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
     if (used_cache_size == MAX_CACHE_SIZE) 
     {
         //eviction stuff
-        sema_down(&buffer_cache_sema);
-        if (x == 63) x = 0;
-
-        // printf("down 144\n");
-        // sema_down(&cache[x].cache_entry_sema);
-
-        cache[x].in_use = 0;
-        
-        // sema_down(&file_modification_sema);
-        if (cache[x].dirty) block_write (fs_device, cache[x].sector, cache[x].bounce_buffer);
-        // sema_up(&file_modification_sema);
-
-        memset(cache[x].bounce_buffer, 0, BLOCK_SECTOR_SIZE);
-        cache[x].in_use = 0;
-        cache[x].accessed = 0;
-        cache[x].dirty = 0;
-        cache[x].sector = -1;
-        
+        evict();
         used_cache_size--;
-        x++;
-        sema_up(&buffer_cache_sema);
-        // printf("Up 160\n");
-        // sema_up(&cache[x].cache_entry_sema);
     }
 
     for (int i = 0; i < MAX_CACHE_SIZE; i++) 
@@ -224,6 +229,25 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
             break;
         }
     }
+}
+
+void read_ahead(block_sector_t *next_block)
+{
+    block_sector_t next_block_read_ahead = *next_block;
+    char buffer[BLOCK_SECTOR_SIZE];
+    if (!cache_lookup(next_block_read_ahead)) 
+        cache_add(next_block_read_ahead, buffer, 0, 0, BLOCK_SECTOR_SIZE, CACHE_READ);
+    
+    free(next_block);
+    thread_exit();
+}
+
+void
+perform_read_ahead(block_sector_t sector)
+{
+    block_sector_t *next_block = (block_sector_t*)malloc(sizeof(block_sector_t));
+    *next_block = sector+1;
+    thread_create("read_ahead_thread", PRI_DEFAULT, read_ahead, next_block);
 }
 
 // void 
