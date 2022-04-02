@@ -2,6 +2,7 @@
 #define FILESYS_CACHE_H
 
 #include "filesys/directory.h"
+#include "threads/synch.h"
 
 struct cache_entry
 {
@@ -10,6 +11,7 @@ struct cache_entry
     int accessed;
     int in_use;
     int dirty;
+    struct semaphore cache_entry_sema;
 };
 
 enum add_flag
@@ -18,9 +20,12 @@ enum add_flag
     CACHE_WRITE
 };
 
+struct semaphore buffer_cache_sema;
+
 void cache_init(void);
-void cache_retrieve(block_sector_t sector, uint8_t *buffer, int32_t bytes_read_or_write, int sector_ofs, int chunk_size);
+void cache_retrieve(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int sector_ofs, int chunk_size);
 bool cache_lookup(block_sector_t sector);
-void cache_add(block_sector_t sector, uint8_t *buffer, int32_t bytes_read_or_write, int sector_ofs, int chunk_size, enum add_flag flag);
+void cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int sector_ofs, int chunk_size, enum add_flag flag);
+void cache_write_back_all(void);
 
 #endif

@@ -378,6 +378,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: error loading executable\n", file_name);
       goto done; 
     }
+  
+
 
   sema_down(&executable_list_sema);
   executable_list[executable_list_idx] = file;
@@ -395,11 +397,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
       if (file_ofs < 0 || file_ofs > file_length (file)) {
         goto done;
       }
-
       file_seek (file, file_ofs);
 
       if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
+      {
         goto done;
+      }
+        
       
       file_ofs += sizeof phdr;
 
@@ -461,7 +465,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-
   sema_up(&(t->parent->exec_sema));
 
   return success;

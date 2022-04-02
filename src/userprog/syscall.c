@@ -14,6 +14,7 @@
 #include "vm/frame.h"
 #include "lib/string.h"
 #include "threads/malloc.h"
+#include "filesys/cache.h"
 
 #define LOWEST_ADDR ((void *) 0x08048000) /* lowest address of stack */
 #define LARGE_WRITE_CHUNK 100  /* max number of bytes to write to stdout at once */
@@ -141,6 +142,7 @@ exit (int status)
 {
   printf("%s: exit(%d)\n", thread_current()->name, status);  
 
+  if (buffer_cache_sema.value == 0) sema_up(&buffer_cache_sema);
   //close any open file descriptors
   for (int i = 2; i < MAX_FILE_DESCRIPTORS; i++)
   {

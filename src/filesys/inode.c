@@ -90,7 +90,7 @@ inode_create (block_sector_t sector, off_t length)
       disk_inode->magic = INODE_MAGIC;
       if (free_map_allocate (sectors, &disk_inode->start)) 
         {
-          cache_add(sector, (uint8_t *)disk_inode, 0, 0, BLOCK_SECTOR_SIZE, CACHE_WRITE);
+          cache_add(sector, disk_inode, 0, 0, BLOCK_SECTOR_SIZE, CACHE_WRITE);
           // block_write (fs_device, sector, disk_inode);
           if (sectors > 0) 
             {
@@ -98,8 +98,10 @@ inode_create (block_sector_t sector, off_t length)
               size_t i;
               
               for (i = 0; i < sectors; i++) 
-                cache_add(disk_inode->start + i, (uint8_t *)zeros, 0, 0, BLOCK_SECTOR_SIZE, CACHE_WRITE);
+              {
+                cache_add(disk_inode->start + i, zeros, 0, 0, BLOCK_SECTOR_SIZE, CACHE_WRITE);
                 // block_write (fs_device, disk_inode->start + i, zeros);
+              }
             }
           success = true; 
         } 
@@ -142,9 +144,9 @@ inode_open (block_sector_t sector)
   inode->removed = false;
   // block_read (fs_device, inode->sector, &inode->data);
   if (cache_lookup(inode->sector)) 
-    cache_retrieve(inode->sector, (uint8_t *)&inode->data, 0, 0, BLOCK_SECTOR_SIZE);
+    cache_retrieve(inode->sector, &inode->data, 0, 0, BLOCK_SECTOR_SIZE);
   else
-    cache_add(inode->sector, (uint8_t *)&inode->data, 0, 0, BLOCK_SECTOR_SIZE, CACHE_READ);
+    cache_add(inode->sector, &inode->data, 0, 0, BLOCK_SECTOR_SIZE, CACHE_READ);
   return inode;
 }
 
