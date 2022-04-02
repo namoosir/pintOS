@@ -11,13 +11,17 @@
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
+// #define BLOCK_NUMBER 12
+
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
   {
+    // block_sector_t blocks[BLOCK_NUMBER];
     block_sector_t start;               /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
+    // uint32_t unused[114];               /* Not used. */
     uint32_t unused[125];               /* Not used. */
   };
 
@@ -88,6 +92,41 @@ inode_create (block_sector_t sector, off_t length)
       size_t sectors = bytes_to_sectors (length);
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
+
+      //initialize blocks array depending on how many blocks are needed
+      // if (sectors > 10)
+      // {
+      //   block_sector_t indirect_blocks[1024];
+      //   disk_inode->blocks[10] = &indirect_blocks;
+
+      //   if (sectors > 1034)
+      //   {
+      //     block_sector_t double_indirect_blocks_level_one[1024];
+      //     for (int i = 0; i < 1024; i++)
+      //     {
+      //       block_sector_t double_indirect_blocks_level_two[1024];
+      //       double_indirect_blocks_level_one[i] = &double_indirect_blocks_level_two;
+      //     }
+      //     disk_inode->blocks[11] = &double_indirect_blocks_level_one;
+      //   }
+      // }
+
+      // size_t occupied = 0;
+      // while(occupied < sectors)
+      // {
+      //   if (occupied < 10)
+      //   {
+      //     if (free_map_allocate (1, disk_inode->blocks[occupied]))
+      //     {
+            
+      //     }
+      //   }
+      //   if (free_map_allocate (1, disk_inode->blocks[occupied]))
+      //   {
+
+      //   }
+      // }
+
       if (free_map_allocate (sectors, &disk_inode->start)) 
         {
           cache_add(sector, disk_inode, 0, 0, BLOCK_SECTOR_SIZE, CACHE_WRITE);

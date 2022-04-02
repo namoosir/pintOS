@@ -35,18 +35,16 @@ cache_init(void)
 //      buffer contents with sent in buffer and return true 
 //      if the contents are the same 
 bool 
-cache_lookup(block_sector_t sector/*, uint8_t *buffer, enum add_flag flag*/)
+cache_lookup(block_sector_t sector)
 {
     sema_down(&buffer_cache_sema);
     for (int i = 0; i < MAX_CACHE_SIZE; i++)
     {
         if (cache[i].sector == sector)
         {
-            // if (flag == CACHE_READ)
             sema_up(&buffer_cache_sema);
             // printf("up 44\n");
             return true;
-            // if (memcmp(buffer, &cache[i].bounce_buffer, ))
         }
     }
     sema_up(&buffer_cache_sema);
