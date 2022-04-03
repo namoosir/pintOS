@@ -55,6 +55,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
   if (pos < inode->data.length)
   {
     off_t index = pos/BLOCK_SECTOR_SIZE;
+    
     if (index < 10) return inode->data.blocks[index];
     else if (index < MAX_INDIRECT_BLOCKS + 10)
     {
@@ -113,33 +114,38 @@ inode_create (block_sector_t sector, off_t length)
       for (int i = 0; i < NUMBER_BLOCKS; i++)
       {
         if (i < 10) disk_inode->blocks[i] = -1;
-        else if (i == 10)
+        else if (i == 10 && sectors > 10)
         {
-          block_sector_t indirect_blocks[MAX_INDIRECT_BLOCKS];
+          block_sector_t *indirect_blocks = (block_sector_t *)malloc(MAX_INDIRECT_BLOCKS*sizeof(block_sector_t));
+          if (indirect_blocks == NULL) 
+          {
+              free(disk_inode);
+              return false;
+          }
 
           for (int j = 0; j < MAX_INDIRECT_BLOCKS; j++)
             indirect_blocks[j] = -1;
 
           disk_inode->blocks[i] = (block_sector_t)indirect_blocks;
         }
-        else
+        else if (i == 11 && sectors > 10 + MAX_INDIRECT_BLOCKS)
         {
-          block_sector_t *level_one[MAX_INDIRECT_BLOCKS];
-
-          for (int j = 0; j < MAX_INDIRECT_BLOCKS; j++)
+          block_sector_t **level_one = malloc (sizeof (block_sector_t) * MAX_INDIRECT_BLOCKS * MAX_INDIRECT_BLOCKS);
+          
+          if (level_one == NULL) 
           {
-            block_sector_t level_two[MAX_INDIRECT_BLOCKS];
-
-            for (int k = 0; k < MAX_INDIRECT_BLOCKS; k++)
-              level_two[k] = -1;
-
-            level_one[j] = level_two;            
+              free(disk_inode);
+              return false;
           }
 
+          for (int j = 0; j < MAX_INDIRECT_BLOCKS; j++)
+            for (int k = 0; k < MAX_INDIRECT_BLOCKS; k++)
+              level_one[j][k] = -1;
+          
           disk_inode->blocks[i] = (block_sector_t)level_one;
         }
       }
-
+        
       size_t occupied = 0;
       static char zeros[BLOCK_SECTOR_SIZE];
 
@@ -168,9 +174,9 @@ inode_create (block_sector_t sector, off_t length)
           size_t level_one_index = (occupied - 10 - MAX_INDIRECT_BLOCKS) / MAX_INDIRECT_BLOCKS;
           size_t level_two_index = (occupied - 10 - MAX_INDIRECT_BLOCKS) % MAX_INDIRECT_BLOCKS;
 
-          if (free_map_allocate (1, &((block_sector_t *)((block_sector_t *)disk_inode->blocks[11])[level_one_index])[level_two_index]))
+          if (free_map_allocate (1, &((block_sector_t **)disk_inode->blocks[11])[level_one_index][level_two_index]))
           {
-            cache_add(((block_sector_t *)((block_sector_t *)disk_inode->blocks[11])[level_one_index])[level_two_index], zeros, 0, 0, BLOCK_SECTOR_SIZE, CACHE_WRITE);
+            cache_add(((block_sector_t **)disk_inode->blocks[11])[level_one_index][level_two_index], zeros, 0, 0, BLOCK_SECTOR_SIZE, CACHE_WRITE);
           }
           else break;
 
@@ -289,7 +295,8 @@ inode_close (struct inode *inode)
           free_map_release (inode->sector, 1);
       //     free_map_release (inode->data.start,
       //                       bytes_to_sectors (inode->data.length)); 
-          for (size_t i = 0; i < bytes_to_sectors(inode->data.length); i++)
+          size_t sectors = bytes_to_sectors(inode->data.length);
+          for (size_t i = 0; i < sectors; i++)
           {
             if (i < 10) free_map_release(inode->data.blocks[i], 1);
             else if (i < MAX_INDIRECT_BLOCKS + 10) free_map_release(((block_sector_t *)inode->data.blocks[10])[i - 10], 1);
@@ -297,10 +304,12 @@ inode_close (struct inode *inode)
             {
               size_t level_one_index = (i - 10 - MAX_INDIRECT_BLOCKS) / MAX_INDIRECT_BLOCKS;
               size_t level_two_index = (i - 10 - MAX_INDIRECT_BLOCKS) % MAX_INDIRECT_BLOCKS;
-              free_map_release(((block_sector_t *)((block_sector_t *)inode->data.blocks[11])[level_one_index])[level_two_index], 1);
+              free_map_release(((block_sector_t **)inode->data.blocks[11])[level_one_index][level_two_index], 1);
             }
-              
           }
+
+          if (sectors > 10) free(inode->data.blocks[10]);
+          if (sectors > 10 + MAX_INDIRECT_BLOCKS) free(inode->data.blocks[11]);
         }
       free (inode); 
     }
