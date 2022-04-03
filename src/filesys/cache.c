@@ -132,6 +132,7 @@ evict(void)
 void
 cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int sector_ofs, int chunk_size, enum add_flag flag)
 {
+    printf("\nCACHE ADD SECTOR::%u, write %d\n", sector, flag);
     for (int i = 0; i < MAX_CACHE_SIZE; i++) 
     {
         if (cache[i].sector == sector && flag == CACHE_WRITE && cache[i].in_use == 1)
