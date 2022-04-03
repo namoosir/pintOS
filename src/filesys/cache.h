@@ -27,5 +27,8 @@ void cache_retrieve(block_sector_t sector, void *buffer, int32_t bytes_read_or_w
 bool cache_lookup(block_sector_t sector);
 void cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int sector_ofs, int chunk_size, enum add_flag flag);
 void cache_write_back_all(void);
+void read_ahead(block_sector_t *next_block);
+void perform_read_ahead(block_sector_t sector);
+void evict(void);
 
 #endif

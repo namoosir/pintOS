@@ -132,8 +132,6 @@ evict(void)
 void
 cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int sector_ofs, int chunk_size, enum add_flag flag)
 {
-    static int x;
-
     for (int i = 0; i < MAX_CACHE_SIZE; i++) 
     {
         if (cache[i].sector == sector && flag == CACHE_WRITE && cache[i].in_use == 1)
@@ -247,85 +245,3 @@ perform_read_ahead(block_sector_t sector)
     *next_block = sector+1;
     thread_create("read_ahead_thread", PRI_DEFAULT, read_ahead, next_block);
 }
-
-// void 
-// cache_add(block_sector_t sector, uint8_t *buffer, int32_t bytes_read_or_write, int sector_ofs, int chunk_size, enum add_flag flag)
-// {
-//     static int x;
-
-//     for (int i = 0; i < MAX_CACHE_SIZE; i++) 
-//     {
-//         if (cache[i].sector == sector && flag == CACHE_WRITE && cache[i].in_use == 1)
-//         {
-//             sema_down(&buffer_cache_sema);
-//             // sema_down(&cache[i].cache_entry_sema);
-
-//             cache[i].accessed = 1;
-//             cache[i].dirty = 1;
-
-//             block_read(fs_device, sector, &cache[i].bounce_buffer);
-//             memcpy(&cache[i].bounce_buffer + sector_ofs, buffer + bytes_read_or_write, chunk_size);
-//             block_write (fs_device, sector, &cache[i].bounce_buffer + sector_ofs);
-//             // block_write (fs_device, sector, &cache[i].bounce_buffer);
-            
-//             sema_up(&buffer_cache_sema);
-//             // sema_up(&cache[i].cache_entry_sema);
-//             return;
-//         }
-//     }
-
-//     if (x == 63) x = 0;
-
-//     if (used_cache_size == MAX_CACHE_SIZE) 
-//     {
-//         //eviction stuff
-//         sema_down(&buffer_cache_sema);
-//         // sema_down(&cache[x].cache_entry_sema);
-
-//         cache[x].in_use = 0;
-//         block_write (fs_device, cache[x].sector, &cache[x].bounce_buffer);
-
-//         memset(&cache[x].bounce_buffer, 0, BLOCK_SECTOR_SIZE);
-//         used_cache_size--;
-//         x++;
-//         sema_up(&buffer_cache_sema);
-//         // sema_up(&cache[x].cache_entry_sema);
-//     }
-
-//     for (int i = 0; i < MAX_CACHE_SIZE; i++) 
-//     {
-//         if (cache[i].in_use == 0)
-//         {
-//             sema_down(&buffer_cache_sema);
-//             // sema_down(&cache[i].cache_entry_sema);
-
-//             cache[i].sector = sector;
-//             cache[i].in_use = 1;
-//             cache[i].accessed = 1;
-
-//             if(flag == CACHE_READ)
-//             {
-//                 cache[i].dirty = 0;
-//                 block_read(fs_device, sector, &cache[i].bounce_buffer);
-//                 memcpy(buffer + bytes_read_or_write, &cache[i].bounce_buffer + sector_ofs, chunk_size);
-//             }
-//             else if (flag == CACHE_WRITE)
-//             {
-//                 cache[i].dirty = 1;
-//                 block_read(fs_device, sector, &cache[i].bounce_buffer);
-//                 memcpy(&cache[i].bounce_buffer + sector_ofs, buffer + bytes_read_or_write, chunk_size);
-//                 block_write (fs_device, sector, &cache[i].bounce_buffer + sector_ofs);
-//                 // block_write (fs_device, sector, &cache[i].bounce_buffer);
-
-//             }
-//             used_cache_size++;
-//             sema_up(&buffer_cache_sema);
-//             // sema_up(&cache[i].cache_entry_sema);
-
-//             break;
-//         }
-//     }
-//     // sema_up(&buffer_cache_sema);
-// }
-
-
