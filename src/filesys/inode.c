@@ -11,7 +11,7 @@
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
-#define MAX_DOUBLE_INDIRECT 125
+#define MAX_INDIRECT_BLOCKS 125
 #define NUMBER_BLOCKS 12
 
 /* On-disk inode.
@@ -22,7 +22,7 @@ struct inode_disk
     // block_sector_t start;            /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[114];               /* Not used. */
+    uint32_t unused[114];               /* Not used. */    
   };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -56,15 +56,15 @@ byte_to_sector (const struct inode *inode, off_t pos)
   {
     off_t index = pos/BLOCK_SECTOR_SIZE;
     if (index < 10) return inode->data.blocks[index];
-    else if (index < MAX_DOUBLE_INDIRECT + 10)
+    else if (index < MAX_INDIRECT_BLOCKS + 10)
     {
       size_t level_one_index = index - 10;
       return ((block_sector_t *)inode->data.blocks[10])[level_one_index];
     } 
     else
     {
-      size_t level_one_index = (index - 10 - MAX_DOUBLE_INDIRECT) / MAX_DOUBLE_INDIRECT;
-      size_t level_two_index = (index - 10 - MAX_DOUBLE_INDIRECT) % MAX_DOUBLE_INDIRECT;
+      size_t level_one_index = (index - 10 - MAX_INDIRECT_BLOCKS) / MAX_INDIRECT_BLOCKS;
+      size_t level_two_index = (index - 10 - MAX_INDIRECT_BLOCKS) % MAX_INDIRECT_BLOCKS;
       return ((block_sector_t *)((block_sector_t *)inode->data.blocks[11])[level_one_index])[level_two_index];
     }
   }
@@ -115,22 +115,22 @@ inode_create (block_sector_t sector, off_t length)
         if (i < 10) disk_inode->blocks[i] = -1;
         else if (i == 10)
         {
-          block_sector_t indirect_blocks[MAX_DOUBLE_INDIRECT];
+          block_sector_t indirect_blocks[MAX_INDIRECT_BLOCKS];
 
-          for (int j = 0; j < MAX_DOUBLE_INDIRECT; j++)
+          for (int j = 0; j < MAX_INDIRECT_BLOCKS; j++)
             indirect_blocks[j] = -1;
 
           disk_inode->blocks[i] = (block_sector_t)indirect_blocks;
         }
         else
         {
-          block_sector_t *level_one[MAX_DOUBLE_INDIRECT];
+          block_sector_t *level_one[MAX_INDIRECT_BLOCKS];
 
-          for (int j = 0; j < MAX_DOUBLE_INDIRECT; j++)
+          for (int j = 0; j < MAX_INDIRECT_BLOCKS; j++)
           {
-            block_sector_t level_two[MAX_DOUBLE_INDIRECT];
+            block_sector_t level_two[MAX_INDIRECT_BLOCKS];
 
-            for (int k = 0; k < MAX_DOUBLE_INDIRECT; k++)
+            for (int k = 0; k < MAX_INDIRECT_BLOCKS; k++)
               level_two[k] = -1;
 
             level_one[j] = level_two;            
@@ -139,21 +139,6 @@ inode_create (block_sector_t sector, off_t length)
           disk_inode->blocks[i] = (block_sector_t)level_one;
         }
       }
-
-
-      // //initialization of blocks
-      // block_sector_t *double_indirect_blocks_level_one[MAX_DOUBLE_INDIRECT];
-      // for (int i = 0; i < MAX_DOUBLE_INDIRECT; i++)
-      // {
-      //   block_sector_t double_indirect_blocks_level_two[MAX_DOUBLE_INDIRECT];
-
-      //   for (int i = 0; i < MAX_DOUBLE_INDIRECT; i++)
-      //     double_indirect_blocks_level_two[i] = -1;
-
-      //   double_indirect_blocks_level_one[i] = double_indirect_blocks_level_two;
-      // }
-      // disk_inode->blocks = double_indirect_blocks_level_one;
-
 
       size_t occupied = 0;
       static char zeros[BLOCK_SECTOR_SIZE];
@@ -168,7 +153,7 @@ inode_create (block_sector_t sector, off_t length)
           }
           else break;
         }
-        else if (occupied < 10 + MAX_DOUBLE_INDIRECT)
+        else if (occupied < 10 + MAX_INDIRECT_BLOCKS)
         {
           size_t indirect_index = occupied - 10;
 
@@ -180,12 +165,12 @@ inode_create (block_sector_t sector, off_t length)
         }
         else 
         {
-          size_t level_one_index = (occupied - 10 - MAX_DOUBLE_INDIRECT) / MAX_DOUBLE_INDIRECT;
-          size_t level_two_index = (occupied - 10 - MAX_DOUBLE_INDIRECT) % MAX_DOUBLE_INDIRECT;
+          size_t level_one_index = (occupied - 10 - MAX_INDIRECT_BLOCKS) / MAX_INDIRECT_BLOCKS;
+          size_t level_two_index = (occupied - 10 - MAX_INDIRECT_BLOCKS) % MAX_INDIRECT_BLOCKS;
 
-          if (free_map_allocate (1, &((block_sector_t *)((block_sector_t *)disk_inode->blocks[10])[level_one_index])[level_two_index]))
+          if (free_map_allocate (1, &((block_sector_t *)((block_sector_t *)disk_inode->blocks[11])[level_one_index])[level_two_index]))
           {
-            cache_add(((block_sector_t *)((block_sector_t *)disk_inode->blocks[10])[level_one_index])[level_two_index], zeros, 0, 0, BLOCK_SECTOR_SIZE, CACHE_WRITE);
+            cache_add(((block_sector_t *)((block_sector_t *)disk_inode->blocks[11])[level_one_index])[level_two_index], zeros, 0, 0, BLOCK_SECTOR_SIZE, CACHE_WRITE);
           }
           else break;
 
@@ -307,11 +292,11 @@ inode_close (struct inode *inode)
           for (size_t i = 0; i < bytes_to_sectors(inode->data.length); i++)
           {
             if (i < 10) free_map_release(inode->data.blocks[i], 1);
-            else if (i < MAX_DOUBLE_INDIRECT + 10) free_map_release(((block_sector_t *)inode->data.blocks[11])[i - 10], 1);
+            else if (i < MAX_INDIRECT_BLOCKS + 10) free_map_release(((block_sector_t *)inode->data.blocks[10])[i - 10], 1);
             else 
             {
-              size_t level_one_index = (i - 10 - MAX_DOUBLE_INDIRECT) / MAX_DOUBLE_INDIRECT;
-              size_t level_two_index = (i - 10 - MAX_DOUBLE_INDIRECT) % MAX_DOUBLE_INDIRECT;
+              size_t level_one_index = (i - 10 - MAX_INDIRECT_BLOCKS) / MAX_INDIRECT_BLOCKS;
+              size_t level_two_index = (i - 10 - MAX_INDIRECT_BLOCKS) % MAX_INDIRECT_BLOCKS;
               free_map_release(((block_sector_t *)((block_sector_t *)inode->data.blocks[11])[level_one_index])[level_two_index], 1);
             }
               
