@@ -346,7 +346,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     sema_down(&file_modification_sema);
     //create the file
-    bool success = filesys_create((const char*)args[0], args[1]);
+    bool success = filesys_create((const char*)args[0], args[1], true);
     sema_up(&file_modification_sema);
 
     //set the returned value
