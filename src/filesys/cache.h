@@ -21,6 +21,7 @@ enum add_flag
 };
 
 struct semaphore buffer_cache_sema;
+struct semaphore read_ahead_sema;
 
 void cache_init(void);
 void cache_retrieve(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int sector_ofs, int chunk_size);
