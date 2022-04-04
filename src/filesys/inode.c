@@ -455,6 +455,28 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   return bytes_written;
 }
 
+void
+file_grow(struct inode_disk *disk_inode , block_sector_t sector, int grow_to_length)
+{
+  int required_sectors = bytes_to_sectors(grow_to_length);
+  int used_sectors = bytes_to_sectors(disk_inode->length);
+  static char zeros[BLOCK_SECTOR_SIZE];
+  if(required_sectors < 10)
+  {
+    for (int i = used_sectors; i < required_sectors; i++)
+      {
+        if (free_map_allocate (1, &disk_inode->blocks[i]))
+          {
+            cache_add(disk_inode->blocks[i], zeros, 0, 0, BLOCK_SECTOR_SIZE, CACHE_WRITE);
+          }
+          else
+            break;
+      }
+  }
+
+
+}
+
 /* Disables writes to INODE.
    May be called at most once per inode opener. */
 void
