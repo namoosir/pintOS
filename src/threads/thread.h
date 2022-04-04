@@ -7,6 +7,7 @@
 #include <threads/synch.h>
 #include <lib/kernel/hash.h>
 #include <vm/page.h>
+#include <filesys/directory.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -111,6 +112,9 @@ struct thread
     char *malloced_pointers[30];       /*A list of pointer we need to free when the thread exits*/
     struct list mapping_info_list;
     int mapping_count;
+#endif
+#ifdef FILESYS
+    struct dir *current_dir;
 #endif
     bool is_performing_syscall;
     struct hash supplemental_page_hash_table;

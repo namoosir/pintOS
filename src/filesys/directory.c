@@ -5,6 +5,7 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
 
 /* A directory. */
 struct dir 
@@ -20,6 +21,89 @@ struct dir_entry
     char name[NAME_MAX + 1];            /* Null terminated file name. */
     bool in_use;                        /* In use or free? */
   };
+
+
+/* Split path and store in array
+    This algorithm is partially based off of:
+    https://www.tutorialspoint.com/c_standard_library/c_function_strtok.htm
+ */
+char **
+split_path (const char *path)
+{
+  size_t path_len = strlen (path);
+  char **path_array = malloc (path_len*(path_len + 1));
+  if (path_array == NULL)
+    return NULL;
+  char *token;
+  int i = 0;
+  char *path_copy = malloc (path_len + 1);
+  if (path_copy == NULL)
+    return NULL;
+  strlcpy (path_copy, path, path_len + 1);
+  token = strtok_r (path_copy, "/", &path_copy);
+  while (token != NULL)
+    {
+      path_array[i] = token;
+      i++;
+      token = strtok_r (NULL, "/", &path_copy);
+    }
+    // free(path_copy); // May not be able to free here?
+    // for(int j = 0; j < i; j++)
+    //   {
+    //     printf("%s\n", path_array[j]);
+    //   }
+  return path_array;
+}
+
+struct dir *
+dir_traverse(struct dir* start_dir, char* next_dir_name, struct inode* i)
+{
+  bool success = dir_lookup(start_dir, next_dir_name, &i);
+  if(!success)
+  {
+    dir_close(start_dir);
+    return NULL;
+  }
+  else
+  {
+    struct dir* new_dir = dir_open(i);
+    dir_close(start_dir);
+    return new_dir;
+  }
+}
+
+struct dir*
+dir_path_open(char *path)
+{
+  if(path == NULL)
+    return NULL;
+
+  char **path_array = split_path(path);
+  struct dir* start_dir = NULL;
+  struct inode* dir_inode = NULL;
+  // Open relative path
+  if(path[0] != '/')
+  {
+    start_dir = dir_open_root();
+    //loop over path_array and traverse directories
+    for(int i = 0; i < (int)strlen(path_array[0]); i++)
+    {
+      start_dir = dir_traverse(start_dir, path_array[i], dir_inode);
+      if(start_dir == NULL)
+      {
+        return NULL;
+      }
+    }
+  }
+  // Open absolute path
+  else if (path[0] == '/')
+  {
+    start_dir = thread_current()->current_dir;
+  }
+
+  free(path_array); 
+  return start_dir;
+}
 
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
