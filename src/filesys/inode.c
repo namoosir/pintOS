@@ -18,10 +18,11 @@
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
   {
-    block_sector_t blocks[NUMBER_BLOCKS];
+    block_sector_t blocks[NUMBER_BLOCKS]; /* Indexing of the file contents*/
     // block_sector_t start;            /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
+    bool is_file;                       /* File or Directory */
     uint32_t unused[114];               /* Not used. */    
   };
 
@@ -94,7 +95,7 @@ inode_init (void)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, bool is_file)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -109,6 +110,7 @@ inode_create (block_sector_t sector, off_t length)
     {
       size_t sectors = bytes_to_sectors (length);
       disk_inode->length = length;
+      disk_inode->is_file = is_file;
       disk_inode->magic = INODE_MAGIC;
 
       for (int i = 0; i < NUMBER_BLOCKS; i++)
@@ -130,12 +132,24 @@ inode_create (block_sector_t sector, off_t length)
         }
         else if (i == 11 && sectors > 10 + MAX_INDIRECT_BLOCKS)
         {
-          block_sector_t **level_one = malloc (sizeof (block_sector_t) * MAX_INDIRECT_BLOCKS * MAX_INDIRECT_BLOCKS);
-          
+          block_sector_t **level_one = malloc (sizeof (block_sector_t *) * MAX_INDIRECT_BLOCKS);
+
           if (level_one == NULL) 
           {
+            //might need to do more freeing
+            free(disk_inode);
+            return false;
+          }
+
+          for(int j=0; j< MAX_INDIRECT_BLOCKS; j++) 
+          {
+            level_one[j] = malloc(MAX_INDIRECT_BLOCKS*sizeof(block_sector_t));
+            if (level_one[j] == NULL)
+            {
+              //might need to do more freeing
               free(disk_inode);
               return false;
+            }
           }
 
           for (int j = 0; j < MAX_INDIRECT_BLOCKS; j++)
@@ -308,8 +322,8 @@ inode_close (struct inode *inode)
             }
           }
 
-          if (sectors > 10) free(inode->data.blocks[10]);
-          if (sectors > 10 + MAX_INDIRECT_BLOCKS) free(inode->data.blocks[11]);
+          if (sectors > 10) free((block_sector_t *)inode->data.blocks[10]);
+          if (sectors > 10 + MAX_INDIRECT_BLOCKS) free((block_sector_t **)inode->data.blocks[11]);
         }
       free (inode); 
     }
@@ -403,6 +417,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
     {
       /* Sector to write, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode, offset);
+      if (sector_idx == (block_sector_t)-1) file_grow(inode, offset);
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
@@ -456,25 +471,81 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 }
 
 void
-file_grow(struct inode_disk *disk_inode , block_sector_t sector, int grow_to_length)
+file_grow(struct inode *inode, int grow_to_length)
 {
+  struct inode_disk disk_inode = inode->data;
+  
   int required_sectors = bytes_to_sectors(grow_to_length);
-  int used_sectors = bytes_to_sectors(disk_inode->length);
+  int used_sectors = bytes_to_sectors(disk_inode.length);
   static char zeros[BLOCK_SECTOR_SIZE];
-  if(required_sectors < 10)
+
+  if (used_sectors <= 10 && required_sectors > 10)
   {
-    for (int i = used_sectors; i < required_sectors; i++)
-      {
-        if (free_map_allocate (1, &disk_inode->blocks[i]))
-          {
-            cache_add(disk_inode->blocks[i], zeros, 0, 0, BLOCK_SECTOR_SIZE, CACHE_WRITE);
-          }
-          else
-            break;
-      }
+    block_sector_t *indirect_blocks = (block_sector_t *)malloc(MAX_INDIRECT_BLOCKS*sizeof(block_sector_t));
+    if (indirect_blocks != NULL) 
+    {
+      for (int j = 0; j < MAX_INDIRECT_BLOCKS; j++)
+        indirect_blocks[j] = -1;
+
+      disk_inode.blocks[10] = (block_sector_t)indirect_blocks;
+    }
   }
 
+  if (used_sectors <= 10 + MAX_INDIRECT_BLOCKS && required_sectors > 10 + MAX_INDIRECT_BLOCKS)
+  {
+    block_sector_t **level_one = malloc (sizeof (block_sector_t *) * MAX_INDIRECT_BLOCKS);
 
+    if (level_one != NULL) 
+    {
+      for(int j=0; j< MAX_INDIRECT_BLOCKS; j++) 
+      {
+        level_one[j] = malloc(MAX_INDIRECT_BLOCKS*sizeof(block_sector_t));
+        if (level_one[j] != NULL)
+        {
+          for (int j = 0; j < MAX_INDIRECT_BLOCKS; j++)
+            for (int k = 0; k < MAX_INDIRECT_BLOCKS; k++)
+              level_one[j][k] = -1;
+          disk_inode.blocks[11] = (block_sector_t)level_one;
+        }
+      }
+    }
+  }
+
+  for (int i = used_sectors; i < required_sectors; i++)
+  {
+    if (i < 10)
+    {
+      if (free_map_allocate (1, &disk_inode.blocks[i]))
+      {
+        cache_add(disk_inode.blocks[i], zeros, 0, 0, BLOCK_SECTOR_SIZE, CACHE_WRITE);
+      }
+      else break;
+    }
+    else if (i < 10 + MAX_INDIRECT_BLOCKS)
+    {
+      size_t indirect_index = i - 10;
+
+      if (free_map_allocate (1, &((block_sector_t *)disk_inode.blocks[10])[indirect_index]))
+      {
+        cache_add(((block_sector_t *)disk_inode.blocks[10])[indirect_index], zeros, 0, 0, BLOCK_SECTOR_SIZE, CACHE_WRITE);
+      }
+      else break;
+    }
+    else 
+    {
+      size_t level_one_index = (i - 10 - MAX_INDIRECT_BLOCKS) / MAX_INDIRECT_BLOCKS;
+      size_t level_two_index = (i - 10 - MAX_INDIRECT_BLOCKS) % MAX_INDIRECT_BLOCKS;
+
+      if (free_map_allocate (1, &((block_sector_t **)disk_inode.blocks[11])[level_one_index][level_two_index]))
+      {
+        cache_add(((block_sector_t **)disk_inode.blocks[11])[level_one_index][level_two_index], zeros, 0, 0, BLOCK_SECTOR_SIZE, CACHE_WRITE);
+      }
+      else break;
+    }
+  }
+  disk_inode.length = grow_to_length; //BLOCK_SECTOR_SIZE*(required_sectors - 1) + required_sectors % BLOCK_SECTOR_SIZE;
+  inode->data = disk_inode; 
+  cache_add(inode->sector, &disk_inode, 0, 0, BLOCK_SECTOR_SIZE, CACHE_WRITE);
 }
 
 /* Disables writes to INODE.
