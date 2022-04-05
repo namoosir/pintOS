@@ -23,12 +23,12 @@ struct dir_entry
   };
 
 
-/* Split path and store in array
+/* Parse path and store in array
     This algorithm is partially based off of:
     https://www.tutorialspoint.com/c_standard_library/c_function_strtok.htm
  */
 char **
-split_path (const char *path)
+parse_path (const char *path)
 {
   size_t path_len = strlen (path);
   char **path_array = malloc (path_len*(path_len + 1));
@@ -55,10 +55,10 @@ split_path (const char *path)
   return path_array;
 }
 
-struct dir *
-dir_traverse(struct dir* start_dir, char* next_dir_name, struct inode* i)
+struct dir*
+dir_next_in_path(struct dir* start_dir, char* next_dir_name, struct inode* dir_inode)
 {
-  bool success = dir_lookup(start_dir, next_dir_name, &i);
+  bool success = dir_lookup(start_dir, next_dir_name, &dir_inode);
   if(!success)
   {
     dir_close(start_dir);
@@ -66,10 +66,26 @@ dir_traverse(struct dir* start_dir, char* next_dir_name, struct inode* i)
   }
   else
   {
-    struct dir* new_dir = dir_open(i);
+    struct dir* new_dir = dir_open(dir_inode);
     dir_close(start_dir);
     return new_dir;
   }
+}
+
+struct dir*
+dir_traverse(struct dir* start_dir, char** path_array, struct inode* dir_inode)
+{
+  int i = 0;
+  while(path_array[i] != NULL)
+    {
+      start_dir = dir_next_in_path(start_dir, path_array[i], dir_inode);
+      if(start_dir == NULL)
+      {
+        return NULL;
+      }
+      i++;
+    }
+    return start_dir;
 }
 
 struct dir*
@@ -78,31 +94,38 @@ dir_path_open(char *path)
   if(path == NULL)
     return NULL;
 
-  char **path_array = split_path(path);
+  char **path_array = parse_path(path);
   struct dir* start_dir = NULL;
   struct inode* dir_inode = NULL;
   // Open relative path
   if(path[0] != '/')
   {
     start_dir = dir_open_root();
-    //loop over path_array and traverse directories
-    for(int i = 0; i < (int)strlen(path_array[0]); i++)
-    {
-      start_dir = dir_traverse(start_dir, path_array[i], dir_inode);
-      if(start_dir == NULL)
-      {
-        return NULL;
-      }
-    }
+    start_dir = dir_traverse(start_dir, path_array, dir_inode);
   }
   // Open absolute path
   else if (path[0] == '/')
   {
     start_dir = thread_current()->current_dir;
+    start_dir = dir_traverse(dir_reopen(start_dir), path_array, dir_inode);
   }
 
-  free(path_array); 
+  free(path_array);
   return start_dir;
+}
+
+bool
+dir_is_inode_removed(struct dir* dir)
+{
+  struct inode* inode = dir_get_inode(dir);
+  if(inode == NULL)
+  {
+    return true;
+  }
+  else
+  {
+    return inode_is_removed(inode);
+  }
 }
 
 /* Creates a directory with space for ENTRY_CNT entries in the
