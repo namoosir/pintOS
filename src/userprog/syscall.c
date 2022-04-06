@@ -15,6 +15,7 @@
 #include "lib/string.h"
 #include "threads/malloc.h"
 #include "filesys/cache.h"
+#include "filesys/directory.h"
 
 #define LOWEST_ADDR ((void *) 0x08048000) /* lowest address of stack */
 #define LARGE_WRITE_CHUNK 100  /* max number of bytes to write to stdout at once */
@@ -346,7 +347,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     sema_down(&file_modification_sema);
     //create the file
-    bool success = filesys_create((const char*)args[0], args[1]);
+    bool success = filesys_create((const char*)args[0], args[1], true);
     sema_up(&file_modification_sema);
 
     //set the returned value
@@ -629,6 +630,33 @@ syscall_handler (struct intr_frame *f UNUSED)
     if (map_exists) {
       list_remove(&map_info->map_elem);
       free(map_info);
+    }
+  }
+  else if(syscall_number == SYS_CHDIR)
+  {
+    char* path = (char*)args[0];
+    if(path == NULL)
+    {
+      f->eax = -1;
+      exit(-1);
+    }
+    struct dir* new_dir = dir_path_open(path);
+    if (new_dir == NULL)
+    {
+      f->eax = -1;
+      exit(-1);
+    }
+    // Make sure the inode is not removed
+    else if (dir_is_inode_removed(new_dir))
+    {
+      dir_close(new_dir);
+      exit(-1);
+    }
+    else
+    {
+      dir_close(thread_current()->current_dir);
+      thread_current()->current_dir = new_dir;
+      f->eax = 0;
     }
   }
 
