@@ -23,7 +23,7 @@ struct inode_disk
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
     bool is_file;                       /* File or Directory */
-    uint32_t unused[114];               /* Not used. */    
+    uint32_t unused[113];               /* Not used. */    
   };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -417,7 +417,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
     {
       /* Sector to write, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode, offset);
-      if (sector_idx == (block_sector_t)-1) file_grow(inode, offset);
+      if (sector_idx == (block_sector_t)-1) file_grow(inode, offset+size);
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
@@ -477,6 +477,7 @@ file_grow(struct inode *inode, int grow_to_length)
   
   int required_sectors = bytes_to_sectors(grow_to_length);
   int used_sectors = bytes_to_sectors(disk_inode.length);
+  // printf("%d, %d\n", required_sectors, used_sectors);
   static char zeros[BLOCK_SECTOR_SIZE];
 
   if (used_sectors <= 10 && required_sectors > 10)

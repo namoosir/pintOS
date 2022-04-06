@@ -136,6 +136,7 @@ cache_evict(void)
 void
 cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int sector_ofs, int chunk_size, enum add_flag flag)
 {
+    if (sector > 4096) exit(-1);
     // printf("\nCACHE ADD SECTOR::%u, write %d\n", sector, flag);
     for (int i = 0; i < MAX_CACHE_SIZE; i++) 
     {
@@ -171,7 +172,7 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
             return;
         }
     }
-    
+
     if (used_cache_size == MAX_CACHE_SIZE) 
     {
         //eviction stuff
