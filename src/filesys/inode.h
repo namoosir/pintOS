@@ -20,5 +20,6 @@ void inode_deny_write (struct inode *);
 void inode_allow_write (struct inode *);
 off_t inode_length (const struct inode *);
 void file_grow(struct inode *inode, int grow_to_length);
+bool inode_is_removed(struct inode *inode);
 
 #endif /* filesys/inode.h */

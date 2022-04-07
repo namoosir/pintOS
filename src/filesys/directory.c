@@ -6,13 +6,9 @@
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 #include "threads/thread.h"
+#include "filesys/inode.h"
 
-/* A directory. */
-struct dir 
-  {
-    struct inode *inode;                /* Backing store. */
-    off_t pos;                          /* Current position. */
-  };
+#define MAX_SUB_DIRS 30
 
 /* A single directory entry. */
 struct dir_entry 
@@ -22,6 +18,8 @@ struct dir_entry
     bool in_use;                        /* In use or free? */
   };
 
+bool dir_is_inode_removed(struct dir* dir);
+
 
 /* Parse path and store in array
     This algorithm is partially based off of:
@@ -30,28 +28,44 @@ struct dir_entry
 char **
 parse_path (const char *path)
 {
-  size_t path_len = strlen (path);
-  char **path_array = malloc (path_len*(path_len + 1));
+  size_t path_len = strlen(path);
+  if (path_len == 0) return NULL;
+  if (path_len > (NAME_MAX+1)*MAX_SUB_DIRS) return NULL;
+  
+  char **path_array = (char**)malloc (MAX_SUB_DIRS*sizeof(char *));
   if (path_array == NULL)
+  {
     return NULL;
+  }
+
+  for (size_t i = 0; i < MAX_SUB_DIRS; i++)
+  {
+    path_array[i] = (char*)malloc(NAME_MAX*sizeof(char*));
+    memset(path_array[i], 0, NAME_MAX);
+  }
+  
   char *token;
   int i = 0;
-  char *path_copy = malloc (path_len + 1);
+  char *path_copy = malloc (NAME_MAX + 1);
   if (path_copy == NULL)
+  {
+    // printf("END OF PARSE PATH::PATH CPY NULL\n");
     return NULL;
-  strlcpy (path_copy, path, path_len + 1);
+  }
+  strlcpy (path_copy, path, NAME_MAX + 1);
   token = strtok_r (path_copy, "/", &path_copy);
   while (token != NULL)
-    {
-      path_array[i] = token;
-      i++;
-      token = strtok_r (NULL, "/", &path_copy);
-    }
-    // free(path_copy); // May not be able to free here?
-    // for(int j = 0; j < i; j++)
-    //   {
-    //     printf("%s\n", path_array[j]);
-    //   }
+  {
+    path_array[i] = token;
+    i++;
+    token = strtok_r (NULL, "/", &path_copy);
+  }
+  // printf("END OF PARSE PATH\n");
+  // free(path_copy); // May not be able to free here?
+  // for(int j = 0; j < 5; j++)
+  // {
+  //   printf("Path_Array:: %s\n", path_array[j]);
+  // }
   return path_array;
 }
 
@@ -76,9 +90,19 @@ struct dir*
 dir_traverse(struct dir* start_dir, char** path_array, struct inode* dir_inode)
 {
   int i = 0;
-  while(path_array[i] != NULL)
+  while((int)path_array[i][0] != 0)
     {
-      start_dir = dir_next_in_path(start_dir, path_array[i], dir_inode);
+      if (strcmp(path_array[i], "..") == 0)
+      {
+        struct dir *root = dir_open_root();
+        if (i-1 != -1 && root != start_dir)
+        {
+          start_dir = dir_next_in_path(start_dir, path_array[i-1], dir_inode);
+        }
+        if (start_dir != root) dir_close(root);
+      }
+      else start_dir = dir_next_in_path(start_dir, path_array[i], dir_inode);
+
       if(start_dir == NULL)
       {
         return NULL;
@@ -89,28 +113,34 @@ dir_traverse(struct dir* start_dir, char** path_array, struct inode* dir_inode)
 }
 
 struct dir*
-dir_path_open(char *path)
+dir_path_open(char **path_array)
 {
-  if(path == NULL)
+  if(path_array == NULL)
     return NULL;
 
-  char **path_array = parse_path(path);
+  // char **path_array = parse_path(path);
   struct dir* start_dir = NULL;
   struct inode* dir_inode = NULL;
-  // Open relative path
-  if(path[0] != '/')
+  // Open absolute path
+  if(path_array[0][0] == '/')
   {
     start_dir = dir_open_root();
     start_dir = dir_traverse(start_dir, path_array, dir_inode);
   }
-  // Open absolute path
-  else if (path[0] == '/')
+  // Open relative path
+  else if (path_array[0][0] != '/')
   {
     start_dir = thread_current()->current_dir;
     start_dir = dir_traverse(dir_reopen(start_dir), path_array, dir_inode);
   }
 
+  for(size_t i = 0; i < sizeof(path_array)/sizeof(path_array[0]); i++)
+  {
+    free(path_array[i]);
+  }
   free(path_array);
+
+
   return start_dir;
 }
 

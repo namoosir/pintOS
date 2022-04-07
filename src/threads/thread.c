@@ -489,9 +489,13 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->parent = running_thread();
+  
+  #ifdef FILESYS
+    t->current_dir = t->parent->current_dir;
+  #endif
 
   #ifdef USERPROG
-    t->parent = running_thread();
     sema_init(&t->process_sema, 0);
     memset(t->fd_array, 0, 128 * sizeof (struct file*)); 
     sema_init(&t->exec_sema, 0);

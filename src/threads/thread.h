@@ -99,12 +99,12 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-
+    struct thread *parent;              /* Parent thread. */
+    
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     struct semaphore process_sema;      /* Semaphore for processes. */
-    struct thread *parent;              /* Parent thread. */
     struct file* fd_array[MAX_FILE_DESCRIPTORS];         /* Set of file descriptors */
     struct semaphore exec_sema;         /* Semaphore for exec syscall */
     tid_t child_process_list[MAX_CHILDREN];      /* Array of child processes */

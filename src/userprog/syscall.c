@@ -16,6 +16,7 @@
 #include "threads/malloc.h"
 #include "filesys/cache.h"
 #include "filesys/directory.h"
+#include "filesys/inode.h"
 
 #define LOWEST_ADDR ((void *) 0x08048000) /* lowest address of stack */
 #define LARGE_WRITE_CHUNK 100  /* max number of bytes to write to stdout at once */
@@ -346,16 +347,79 @@ syscall_handler (struct intr_frame *f UNUSED)
       exit(-1);
     }
     sema_down(&file_modification_sema);
-    //create the file
-    bool success = filesys_create((const char*)args[0], args[1], true);
-    sema_up(&file_modification_sema);
 
-    //set the returned value
-    f->eax = success;
+    char* path = (char*)args[0];
+    if(path == NULL)
+    {
+      exit(-1);
+    }
+
+    char **path_array = parse_path(path);
+    // printf("here %s\n", path_array[0]);
+    if (path_array == NULL)
+    {
+      f->eax = 0;
+      return;
+    }
+
+    // struct dir* new_dir = dir_path_open(path_array);
+    // if (new_dir != NULL) 
+    // {
+    //   f->eax = 0;
+    //   dir_close(new_dir);
+    //   return;
+    // }
+    // dir_close(new_dir);
+
+    char *file_to_create = (char*)malloc(sizeof(path_array[0]));
+
+    int i = 0;
+    while ((int)path_array[i][0] != 0)
+    {
+      i++;
+    }
+    i--;
+    int size = strlen(path_array[i]) + 1;
+    // printf("size is %d\n", strlen(path_array[0]));
+    strlcpy(file_to_create, path_array[i], size);
+    memset(path_array[i], 0, size);
+
+    // printf("after memset %d bitch\n", *path_array[i]);
+    // printf("after memcpy %s\n", file_to_create);
+    struct dir *new_dir;
+    bool used_curr_thread_dir = false;
+    if (path_array[0][0] == 0) 
+    {
+      new_dir = dir_reopen(thread_current()->current_dir);
+      used_curr_thread_dir = true;
+      // printf("hi\n");
+    }
+    else new_dir = dir_path_open(path_array);
+
+    if (new_dir == NULL)
+    {
+      f->eax = 0;
+    }
+    // else if (dir_is_inode_removed(new_dir))
+    // {
+    //   dir_close(new_dir);
+    //   f->eax = 0;
+    // }
+    else
+    {
+      // printf("here\n");
+      bool success = filesys_create(file_to_create, args[1], new_dir, true);
+      // printf("herererer Succ: %d\n", success);
+      if (!used_curr_thread_dir) dir_close(new_dir);
+      sema_up(&file_modification_sema);
+
+      //set the returned value
+      f->eax = success;
+    }
+    free(file_to_create);
   }
   else if (syscall_number == SYS_REMOVE)
   {
-
     // ensure that argument is a valid pointer
     if (bad_ptr_arg(args[0]))
     {
@@ -637,27 +701,90 @@ syscall_handler (struct intr_frame *f UNUSED)
     char* path = (char*)args[0];
     if(path == NULL)
     {
-      f->eax = -1;
-      exit(-1);
+      f->eax = 0;
     }
-    struct dir* new_dir = dir_path_open(path);
+
+    char **path_array = parse_path(path);
+    struct dir* new_dir = dir_path_open(path_array);
+    
     if (new_dir == NULL)
     {
-      f->eax = -1;
-      exit(-1);
+      f->eax = 0;
     }
     // Make sure the inode is not removed
-    else if (dir_is_inode_removed(new_dir))
-    {
-      dir_close(new_dir);
-      exit(-1);
-    }
+    // else if (dir_is_inode_removed(new_dir))
+    // {
+    //   dir_close(new_dir);
+    //   f->eax = 0;
+    // }
     else
     {
       dir_close(thread_current()->current_dir);
       thread_current()->current_dir = new_dir;
-      f->eax = 0;
+      f->eax = 1;
     }
   }
+  else if (syscall_number == SYS_MKDIR)
+  {
+    char* path = (char*)args[0];
+    if (path == NULL) f->eax = 0;
+    char **path_array = parse_path(path);
 
+    if (path_array == NULL)
+    {
+      f->eax = 0;
+      return;
+    }
+
+    struct dir* new_dir = dir_path_open(path_array);
+    if (new_dir != NULL) 
+    {
+      f->eax = 0;
+      dir_close(new_dir);
+      return;
+    }
+    dir_close(new_dir);
+
+    char *dir_to_create = (char*)malloc(sizeof(path_array[0]));
+
+    int i = 0;
+    while ((int)path_array[i][0] != 0)
+    {
+      i++;
+    }
+    i--;
+    int size = strlen(path_array[i]) + 1;
+    strlcpy(dir_to_create, path_array[i], size);
+    memset(path_array[i], 0, size);
+    bool used_curr_thread_dir = false;
+    if (path_array[0][0] == 0)
+    {
+      new_dir = dir_reopen(thread_current()->current_dir);
+      used_curr_thread_dir = true;
+    } 
+    else new_dir = dir_path_open(path_array);
+
+    if (new_dir == NULL)
+    {
+      f->eax = 0;
+    }
+    // else if (dir_is_inode_removed(new_dir))
+    // {
+    //   dir_close(new_dir);
+    //   f->eax = 0;
+    // }
+    else
+    {
+      sema_down(&file_modification_sema);
+      if (filesys_create(dir_to_create, 0, new_dir, false)) f->eax = 1;
+      else f->eax = 0;
+      if (!used_curr_thread_dir) dir_close(new_dir);
+      sema_up(&file_modification_sema);
+    }
+    free(dir_to_create);
+  }
+  else if (SYS_READDIR)
+  {
+
+  }
 }
