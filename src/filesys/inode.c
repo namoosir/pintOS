@@ -419,11 +419,17 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   if (inode->deny_write_cnt)
     return 0;
 
+  if (inode->data.length < offset + size)
+  {
+    block_sector_t s = byte_to_sector (inode, offset + size);
+    if (s == (block_sector_t)-1) file_grow(inode, offset + size);
+    else inode->data.length = offset + size;
+  }
+
   while (size > 0) 
     {
       /* Sector to write, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode, offset);
-      if (sector_idx == (block_sector_t)-1) file_grow(inode, offset+size);
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
@@ -507,15 +513,15 @@ file_grow(struct inode *inode, int grow_to_length)
       for(int j=0; j< MAX_INDIRECT_BLOCKS; j++) 
       {
         level_one[j] = malloc(MAX_INDIRECT_BLOCKS*sizeof(block_sector_t));
-        if (level_one[j] != NULL)
-        {
-          for (int j = 0; j < MAX_INDIRECT_BLOCKS; j++)
-            for (int k = 0; k < MAX_INDIRECT_BLOCKS; k++)
-              level_one[j][k] = -1;
-          disk_inode.blocks[11] = (block_sector_t)level_one;
-        }
+        if (level_one[j] == NULL) return;
       }
     }
+
+    for (int j = 0; j < MAX_INDIRECT_BLOCKS; j++)
+      for (int k = 0; k < MAX_INDIRECT_BLOCKS; k++)
+        level_one[j][k] = -1;
+    disk_inode.blocks[11] = (block_sector_t)level_one;
+    
   }
 
   for (int i = used_sectors; i < required_sectors; i++)
