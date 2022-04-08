@@ -25,6 +25,7 @@ struct inode;
 
 /* Parsing path */
 char ** parse_path (const char *path);
+void free_path_array(char **path_array);
 
 /* Opening and closing directories. */
 bool dir_create (block_sector_t sector, size_t entry_cnt);

@@ -28,6 +28,7 @@ bool dir_is_inode_removed(struct dir* dir);
 char **
 parse_path (const char *path)
 {
+  // printf("malloc\n");
   size_t path_len = strlen(path);
   if (path_len == 0) return NULL;
   if (path_len > (NAME_MAX+1)*MAX_SUB_DIRS) return NULL;
@@ -94,12 +95,18 @@ dir_traverse(struct dir* start_dir, char** path_array, struct inode* dir_inode)
     {
       if (strcmp(path_array[i], "..") == 0)
       {
-        struct dir *root = dir_open_root();
-        if (i-1 != -1 && root != start_dir)
-        {
-          start_dir = dir_next_in_path(start_dir, path_array[i-1], dir_inode);
-        }
-        if (start_dir != root) dir_close(root);
+        start_dir = get_parent_dir(start_dir);
+        // struct dir *root = dir_open_root();
+        // if (i-1 != -1 && root != start_dir)
+        // {
+        //   start_dir = dir_next_in_path(start_dir, path_array[i-1], dir_inode);
+        // }
+        // if (start_dir != root) dir_close(root);
+      }
+      else if (strcmp(path_array[i], ".") == 0)
+      {
+        i++;
+        continue;
       }
       else start_dir = dir_next_in_path(start_dir, path_array[i], dir_inode);
 
@@ -134,13 +141,6 @@ dir_path_open(char **path_array)
     start_dir = dir_traverse(dir_reopen(start_dir), path_array, dir_inode);
   }
 
-  for(size_t i = 0; i < sizeof(path_array)/sizeof(path_array[0]); i++)
-  {
-    free(path_array[i]);
-  }
-  free(path_array);
-
-
   return start_dir;
 }
 
@@ -156,6 +156,23 @@ dir_is_inode_removed(struct dir* dir)
   {
     return inode_is_removed(inode);
   }
+}
+
+//TODO: MAKE THIS FUNCTION WORK
+void
+free_path_array(char **path_array)
+{
+  // printf("in here %s\n", path_array[0]);
+  // for(int i = 0; i < MAX_SUB_DIRS; i++)
+  // {
+  //   printf("Arr:: %s\n", path_array[i]);
+  // }
+  // for(int i = 0; i < MAX_SUB_DIRS; i++)
+  // {
+  //   printf("loop\n");
+  //   free(path_array[i]);
+  // }
+  // free(path_array);
 }
 
 /* Creates a directory with space for ENTRY_CNT entries in the

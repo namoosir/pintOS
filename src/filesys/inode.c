@@ -43,6 +43,7 @@ struct inode
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     struct inode_disk data;             /* Inode content. */
+    struct dir* parent_dir;
   };
 
 /* Returns the block device sector that contains byte offset POS
@@ -87,6 +88,11 @@ void
 inode_init (void) 
 {
   list_init (&open_inodes);
+}
+
+bool
+inode_is_file(struct inode *inode){
+  return inode->data.is_file;
 }
 
 /* Initializes an inode with LENGTH bytes of data and
@@ -586,4 +592,16 @@ off_t
 inode_length (const struct inode *inode)
 {
   return inode->data.length;
+}
+
+void
+save_parent_dir(struct dir* parent_dir, struct inode* current)
+{
+  current->parent_dir = parent_dir;
+}
+
+struct dir*
+get_parent_dir(struct dir* curr)
+{
+  return curr->inode->parent_dir;
 }

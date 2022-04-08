@@ -6,6 +6,8 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/cache.h"
+#include "threads/thread.h"
+#include <string.h>
 
 /* Partition that contains the file system. */
 struct block *fs_device;
@@ -52,6 +54,14 @@ filesys_create (const char *name, off_t initial_size, struct dir* dir, bool is_f
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size, is_file)
                   && dir_add (dir, name, inode_sector));
+
+  if (success)
+  {
+    struct inode *inode;
+    dir_lookup(dir, name, &inode);
+    save_parent_dir(dir, inode);
+  }
+  
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
   dir_close (dir);
@@ -65,9 +75,18 @@ filesys_create (const char *name, off_t initial_size, struct dir* dir, bool is_f
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 struct file *
-filesys_open (const char *name)
+filesys_open (const char *name, struct dir* dir)
 {
-  struct dir *dir = dir_open_root ();
+  if (strcmp(name, ".") == 0)
+  {
+    return file_open (dir->inode);
+  }
+  if (strcmp(name, "..") == 0)
+  {
+    return file_open (get_parent_dir(dir)->inode);
+  }
+  // struct dir *dir = dir_open_root ();
+  // struct dir *dir = dir_reopen(thread_current()->current_dir);
   struct inode *inode = NULL;
 
   if (dir != NULL)
@@ -99,6 +118,11 @@ do_format (void)
   free_map_create ();
   if (!dir_create (ROOT_DIR_SECTOR, 16))
     PANIC ("root directory creation failed");
+
+  struct dir *root = dir_open_root();
+  save_parent_dir(root, root->inode);
+  dir_close (root);
+
   free_map_close ();
   printf ("done.\n");
 }
