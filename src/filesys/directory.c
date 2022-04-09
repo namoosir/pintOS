@@ -34,19 +34,27 @@ parse_path (const char *path)
   if (path_len > (NAME_MAX+1)*MAX_SUB_DIRS) return NULL;
   
   char **path_array = (char**)malloc (MAX_SUB_DIRS*sizeof(char *));
+
+
   if (path_array == NULL)
   {
     return NULL;
   }
-
+  
   for (size_t i = 0; i < MAX_SUB_DIRS; i++)
   {
     path_array[i] = (char*)malloc(NAME_MAX*sizeof(char*));
     memset(path_array[i], 0, NAME_MAX);
   }
   
-  char *token;
   int i = 0;
+  if(path[0] == '/')
+  {
+    path_array[0][0] = '/';
+    i++;
+  }
+  
+  char *token;  
   char *path_copy = malloc (NAME_MAX + 1);
   if (path_copy == NULL)
   {
@@ -91,8 +99,12 @@ struct dir*
 dir_traverse(struct dir* start_dir, char** path_array, struct inode* dir_inode)
 {
   int i = 0;
+
+  if (path_array[0][0] == '/') i++;
+  
   while((int)path_array[i][0] != 0)
     {
+      // printf("in while loop\n");
       if (strcmp(path_array[i], "..") == 0)
       {
         start_dir = get_parent_dir(start_dir);
@@ -135,7 +147,7 @@ dir_path_open(char **path_array)
     start_dir = dir_traverse(start_dir, path_array, dir_inode);
   }
   // Open relative path
-  else if (path_array[0][0] != '/')
+  else
   {
     start_dir = thread_current()->current_dir;
     start_dir = dir_traverse(dir_reopen(start_dir), path_array, dir_inode);
@@ -327,6 +339,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+  inode_increment_containing_dirs(dir->inode);
 
  done:
   return success;

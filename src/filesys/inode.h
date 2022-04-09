@@ -24,5 +24,9 @@ bool inode_is_removed(struct inode *inode);
 bool inode_is_file(struct inode *inode);
 struct dir* get_parent_dir(struct dir* curr);
 void save_parent_dir(struct dir* parent_dir, struct inode* current);
-
+void inode_set_length(struct inode* inode, int length);
+void inode_decrement_containing_dirs(struct inode* inode);
+void inode_increment_containing_dirs(struct inode* inode);
+int inode_get_containing_dirs(struct inode* inode);
+void inode_initialize_containing_dirs(struct inode* inode);
 #endif /* filesys/inode.h */

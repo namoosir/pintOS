@@ -63,7 +63,7 @@ fsutil_rm (char **argv)
   const char *file_name = argv[1];
   
   printf ("Deleting '%s'...\n", file_name);
-  if (!filesys_remove (file_name))
+  if (!filesys_remove (file_name, dir_open_root()))
     PANIC ("%s: delete failed\n", file_name);
 }
 
@@ -182,6 +182,7 @@ fsutil_append (char **argv)
     PANIC ("couldn't allocate buffer");
 
   /* Open source file. */
+  //TODO: TRY PARSING
   src = filesys_open (file_name, dir_open_root());
   if (src == NULL)
     PANIC ("%s: open failed", file_name);

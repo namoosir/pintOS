@@ -11,7 +11,7 @@
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
-#define MAX_INDIRECT_BLOCKS 125
+#define MAX_INDIRECT_BLOCKS 128
 #define NUMBER_BLOCKS 12
 
 /* On-disk inode.
@@ -44,6 +44,7 @@ struct inode
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     struct inode_disk data;             /* Inode content. */
     struct dir* parent_dir;
+    int containing_items;
   };
 
 /* Returns the block device sector that contains byte offset POS
@@ -604,4 +605,34 @@ struct dir*
 get_parent_dir(struct dir* curr)
 {
   return curr->inode->parent_dir;
+}
+
+void 
+inode_set_length(struct inode* inode, int length)
+{
+  inode->data.length = length;
+}
+
+void
+inode_increment_containing_dirs(struct inode* inode)
+{
+  inode->containing_items++;
+}
+
+void
+inode_decrement_containing_dirs(struct inode* inode)
+{
+  inode->containing_items--;
+}
+
+int
+inode_get_containing_dirs(struct inode* inode)
+{
+  return inode->containing_items;
+}
+
+void
+inode_initialize_containing_dirs(struct inode* inode)
+{
+  inode->containing_items = 0;
 }

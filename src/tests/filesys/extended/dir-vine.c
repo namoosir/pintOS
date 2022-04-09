@@ -66,6 +66,7 @@ test_main (void)
       /* Descend into directory. */
       CHECK (chdir (dir_name), "chdir \"%s\"", dir_name);
     }
+    msg("finished");
   CHECK (i > 200, "created files and directories only to level %d", i);
   quiet = false;
 
