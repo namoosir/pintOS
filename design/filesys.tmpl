@@ -8,9 +8,8 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Rakshit Patel <rakshit.patel@mail.utoronto.ca>
+Nazmus Saqeeb <nazmus.saqeeb@mail.utoronto.ca>
 
 ---- PRELIMINARIES ----
 
@@ -33,10 +32,23 @@ FirstName LastName <email@domain.example>
 >> A2: What is the maximum size of a file supported by your inode
 >> structure?  Show your work.
 
+We have 10 direct blocks, 1 indirect block and 1 double indirect block.
+THe indirect block points to 128 blocks. The double indirect block points 
+to 128 pointers of which each point to 128 blocks.
+NOTE: Each block has BLOCK_SECTOR_SIZE bytes (512 bytes).
+Max size of the file is 10*512 + 128*512 + 128*128*512 = 8,459,264 bytes.
+
 ---- SYNCHRONIZATION ----
 
 >> A3: Explain how your code avoids a race if two processes attempt to
 >> extend a file at the same time.
+
+In each inode, we have a semaphore that we down before growing the file that correspondes 
+to that inode. So, when a file is being extended, we compute the required amount of block 
+sectors needed to extend the file and them into our cache. And if another process is trying 
+to extend the file, ir will wait for the semaphore to be up and then it will again compute the 
+required blocks and see if the file needs to be extended any further. So, we are not extending more  
+then we actually need to.
 
 >> A4: Suppose processes A and B both have file F open, both
 >> positioned at end-of-file.  If A reads and B writes F at the same
@@ -45,12 +57,24 @@ FirstName LastName <email@domain.example>
 >> nonzero data, A is not allowed to see all zeros.  Explain how your
 >> code avoids this race.
 
+When B is writing more data from the end-of-file, process A will not know how much B 
+has written because the "pos" member in the file struct and the length of the inode will 
+remain the same until process B finished writing. So, A will not be able to read the new 
+data that B is writing until B has finished writing.
+
 >> A5: Explain how your synchronization design provides "fairness".
 >> File access is "fair" if readers cannot indefinitely block writers
 >> or vice versa.  That is, many processes reading from a file cannot
 >> prevent forever another process from writing the file, and many
 >> processes writing to a file cannot prevent another process forever
 >> from reading the file.
+
+Currently, we are just using a single for the entire buffer cache. This means that our cache is not 
+"fair" and will only let 1 thread access the entire buffer cache at a time.
+However, a better way of doing this to use a read lock and writing lock for each cache entry and only let the 
+thread block the entry that it needs to work with. This way other threads can access the same file and read and write 
+to the same block. So, by using per block synchronization we can make the cache "fair" and thus make the file 
+reading and writing "fair".
 
 ---- RATIONALE ----
 
@@ -59,6 +83,16 @@ FirstName LastName <email@domain.example>
 >> indirect blocks?  If not, why did you choose an alternative inode
 >> structure, and what advantages and disadvantages does your
 >> structure have, compared to a multilevel index?
+
+Yes, our inode structure is multilevel index. We have 10 direct blocks, 
+1 indirect block and 1 double indirect block. We chose this structure because it is 
+efficient if we are dealing with small files. The 10 direct blocks can be indexed 
+quickly since we dont have to go through the extra step of finding a pointer to the 
+block. For medium sized files, we have to go through the indirect block but this since 
+it is indirect we have to throught just 1 level of pointers. For large files, we have 
+to go through the double indirect block, which is 2 levels of pointers. This gradual 
+increase in the amount of memory and pointer we have to go through is the reason why 
+we chose this structure since it makes file creation and growth more efficient.
 
                 SUBDIRECTORIES
                 ==============
@@ -74,6 +108,19 @@ FirstName LastName <email@domain.example>
 >> B2: Describe your code for traversing a user-specified path.  How
 >> do traversals of absolute and relative paths differ?
 
+First we parse the given path and split it by the "/" character. Then we 
+store the tokenized path in an array of strings. We then iterate through 
+each string and advance to the next directory by opening it and closing the 
+previous one. This process continues unitl we reach the end of the array.
+
+If the path is absolute, we start at the root directory and then go to the 
+next directory. If the path is relative, we start at the current working 
+directory of the thread and then go to the next directory.
+
+For . we stay put at the current directory.
+For .. each directory has a pointer to its parent directory. So, we simply 
+open the parent directory and close the current directory.
+
 ---- SYNCHRONIZATION ----
 
 >> B4: How do you prevent races on directory entries?  For example,
@@ -81,10 +128,20 @@ FirstName LastName <email@domain.example>
 >> should succeed, as should only one of two simultaneous attempts to
 >> create a file with the same name, and so on.
 
+We are using a semaphore in the inode struct that is downed when performing an 
+operation such as creating or removing in the directory and upped afterwards. 
+This prevents simultaneous creations and removals of the file.
+
 >> B5: Does your implementation allow a directory to be removed if it
 >> is open by a process or if it is in use as a process's current
 >> working directory?  If so, what happens to that process's future
 >> file system operations?  If not, how do you prevent it?
+
+Our implementation does allow a directory to be removed if it is being used by 
+a process current working directory. We mark the corresponding inode as removed.
+The process future filesystem operations can carry on because we always check if it 
+is trying to access a removed inode or not, and we disallow access to the inode if 
+it is removed.
 
 ---- RATIONALE ----
 
@@ -105,9 +162,22 @@ FirstName LastName <email@domain.example>
 >> C2: Describe how your cache replacement algorithm chooses a cache
 >> block to evict.
 
+We are using the clock algorithm to select the cache entry to evict. 
+There is counter which behaves as a pointer to each index and we increment 
+it each time we find a cache entry that is accessed (at the same time, we set 
+that entry to not accessed). When we find an entry that is not accessed, we 
+clear that entry and also write it back to the block if it was dirty. This 
+algorithm approximates the LRU algorithm.
+
 >> C3: Describe your implementation of write-behind.
 
+During eviction, we always make sure to write back the block to the disk if it 
+is dirty. This ensures write back 
+
 >> C4: Describe your implementation of read-ahead.
+
+We tried to use a thread which is created specialy to read the next block into the cache.
+This thread then exits after performing the reading operation.
 
 ---- SYNCHRONIZATION ----
 
@@ -115,13 +185,39 @@ FirstName LastName <email@domain.example>
 >> buffer cache block, how are other processes prevented from evicting
 >> that block?
 
+In our current implementation we lock the entire cache, so only one thread can 
+modify the cache at a time. If there is a thread that is reading or writing then 
+no other thread can evict the block since the entire cache will be locked.
+
+A better way to implement this would be to keep track of the number of processes that are 
+using the block via some counter and only evict if that count is 0. If the count is 
+more than 0 then we dont evict the block.
+
 >> C6: During the eviction of a block from the cache, how are other
 >> processes prevented from attempting to access the block?
+
+We lock the entire cache so there is no way another process can access the block during eviction.
+
+A better way of implementing this would be to have a semaphore for each cache entry.
+This way we if a process is evicting, we can lock that cache entry and prevent more threads 
+from accessing the it.
 
 ---- RATIONALE ----
 
 >> C7: Describe a file workload likely to benefit from buffer caching,
 >> and workloads likely to benefit from read-ahead and write-behind.
+
+If the work load consists of only files that are using less blocks than the cache size (64), 
+then we can would never have to do any I/O operation to the blocks on the disk. Every thing would be 
+done in memory and would be much faster.
+
+For read ahead, if we hava file that is stored in contiguous blocks, we can read ahead the next 
+block and not have to worry about finding it each time we want to access the same file in the next 
+block. The read ahead will already have the next block in the memory for the thread to use.
+
+For write back, if we are making multiple changes to a file in a short period of time, we can benefit 
+from write back by writing the file back to the disk perodidically. This will ensure that most of the 
+changes are made in memory (which is faster), but only the final version is written to the disk.
 
                SURVEY QUESTIONS
                ================
