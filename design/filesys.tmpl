@@ -148,6 +148,10 @@ it is removed.
 >> B6: Explain why you chose to represent the current directory of a
 >> process the way you did.
 
+We used a pointer to a dir struct inside the thread struct. This way we can 
+can access the threads current directory from anywhere in the code. We can also modify 
+the current directory of the thread if needed easily.
+
                  BUFFER CACHE
                  ============
 
