@@ -176,7 +176,8 @@ algorithm approximates the LRU algorithm.
 >> C3: Describe your implementation of write-behind.
 
 During eviction, we always make sure to write back the block to the disk if it 
-is dirty. This ensures write back 
+is dirty. This ensures write back because we if a block is dirty, it is not immediately
+written to the disk. Instead, we wait until eviction.
 
 >> C4: Describe your implementation of read-ahead.
 
