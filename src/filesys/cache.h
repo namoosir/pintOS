@@ -11,7 +11,9 @@ struct cache_entry
     int accessed;
     int in_use;
     int dirty;
-    struct semaphore cache_entry_sema;
+    struct semaphore cache_entry_read_sema;
+    struct semaphore cache_entry_write_sema;
+    struct semaphore cache_entry_modification_sema;
 };
 
 enum add_flag

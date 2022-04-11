@@ -34,7 +34,9 @@ cache_init(void)
     for(int i = 0; i < MAX_CACHE_SIZE; i++){
         cache[i].sector = -1;
         memset(cache[i].bounce_buffer, 0, BLOCK_SECTOR_SIZE);
-        sema_init(&cache[i].cache_entry_sema, 1);
+        sema_init(&cache[i].cache_entry_read_sema, 1);
+        sema_init(&cache[i].cache_entry_write_sema, 1);
+        sema_init(&cache[i].cache_entry_modification_sema, 1);
     }
     
 }
@@ -136,12 +138,38 @@ cache_evict(void)
     }
     // if(cache[cache_clock_pointer].dirty)
     // {
+    if(cache[cache_clock_pointer].cache_entry_modification_sema.value != 0)
+    {
+        sema_down(&cache[cache_clock_pointer].cache_entry_modification_sema);
+    }
+    if(cache[cache_clock_pointer].cache_entry_write_sema.value != 0)
+    {
+        sema_down(&cache[cache_clock_pointer].cache_entry_write_sema);
+    }
+        if(cache[cache_clock_pointer].cache_entry_read_sema.value != 0)
+    {
+        sema_down(&cache[cache_clock_pointer].cache_entry_read_sema);
+    }
+
         block_write(fs_device, cache[cache_clock_pointer].sector, cache[cache_clock_pointer].bounce_buffer);
         cache[cache_clock_pointer].dirty = 0;
     // }
     memset(cache[cache_clock_pointer].bounce_buffer, 0, BLOCK_SECTOR_SIZE);
     cache[cache_clock_pointer].in_use = 0;
     cache[cache_clock_pointer].sector = -1;
+
+    if(cache[cache_clock_pointer].cache_entry_modification_sema.value == 0)
+    {
+        sema_up(&cache[cache_clock_pointer].cache_entry_modification_sema);
+    }
+    if(cache[cache_clock_pointer].cache_entry_write_sema.value == 0)
+    {
+        sema_up(&cache[cache_clock_pointer].cache_entry_write_sema);
+    }
+        if(cache[cache_clock_pointer].cache_entry_read_sema.value == 0)
+    {
+        sema_up(&cache[cache_clock_pointer].cache_entry_read_sema);
+    }
 
     sema_up(&buffer_cache_sema);
 }
@@ -155,7 +183,9 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
     {
         if (cache[i].sector == sector && flag == CACHE_WRITE && cache[i].in_use == 1)
         {
-            sema_down(&buffer_cache_sema);
+            // sema_down(&buffer_cache_sema);
+            sema_down(&cache[i].cache_entry_write_sema);
+
             // printf("down 111\n");
 
             cache[i].accessed = 1;
@@ -180,7 +210,9 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
                 // sema_up(&buffer_cache_sema);
                 // printf("up 135\n");
             }
-            sema_up(&buffer_cache_sema);
+            // sema_up(&buffer_cache_sema);
+            sema_up(&cache[i].cache_entry_write_sema);
+
 
             return;
         }
@@ -197,20 +229,32 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
     {
         if (cache[i].in_use == 0)
         {
-            sema_down(&buffer_cache_sema);
+            // sema_down(&buffer_cache_sema);
             // printf("down 167\n");
-            // sema_down(&cache[i].cache_entry_sema);
-
+            sema_down(&cache[i].cache_entry_modification_sema);
             cache[i].sector = sector;
             cache[i].in_use = 1;
             cache[i].accessed = 1;
+            sema_up(&cache[i].cache_entry_modification_sema);
 
             if(flag == CACHE_READ)
             {
-                cache[i].dirty = 0;
+                // sema_down(&cache[i].cache_entry_modification_sema);
+                // cache[i].dirty = 0;//??????
+                // sema_up(&cache[i].cache_entry_modification_sema);
+                
+                if(cache[i].cache_entry_write_sema.value == 0)
+                {
+                    sema_down(&cache[i].cache_entry_read_sema);
+                }
                 block_read(fs_device, sector, cache[i].bounce_buffer);
                 memcpy(buffer + bytes_read_or_write, cache[i].bounce_buffer + sector_ofs, chunk_size);
                 
+                if(cache[i].cache_entry_read_sema.value == 0)
+                {
+                    sema_up(&cache[i].cache_entry_read_sema);
+                }
+                // sema_up(&cache[i].cache_entry_modification_sema);
                 // struct thread *cur = thread_current();
                 // if (strcmp(thread_current()->name, "read_ahead") != 0)
                 // {
@@ -240,8 +284,11 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
             }
             else if (flag == CACHE_WRITE)
             {
+                // sema_down(&cache[i].cache_entry_modification_sema);
                 cache[i].dirty = 1;
+                // sema_up(&cache[i].cache_entry_modification_sema);
 
+                sema_down(&cache[i].cache_entry_write_sema);
                 if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
                 {
                     // sema_down(&buffer_cache_sema);
@@ -263,9 +310,12 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
                     // sema_up(&buffer_cache_sema);
                 }
                 // block_write (fs_device, sector, &cache[i].bounce_buffer);
+                sema_up(&cache[i].cache_entry_write_sema);
+                // sema_up(&cache[i].cache_entry_modification_sema);
+
             }
             used_cache_size++;
-            sema_up(&buffer_cache_sema);
+            // sema_up(&buffer_cache_sema);
             // if(flag == CACHE_READ)
             // {
             //     if (strcmp(thread_current()->name, "read_ahead") != 0)
