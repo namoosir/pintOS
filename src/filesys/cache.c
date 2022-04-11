@@ -106,6 +106,7 @@ cache_write_back_all(void)
 
         if (cache[i].dirty)
         {
+            // printf("cache_write_back_all: writing back sector %d\n", cache[i].sector);
             // sema_down(&file_modification_sema);
             block_write(fs_device, cache[i].sector, cache[i].bounce_buffer);
             // sema_up(&file_modification_sema);
@@ -133,11 +134,11 @@ cache_evict(void)
         cache[cache_clock_pointer].accessed = 0;
         cache_clock_pointer = (cache_clock_pointer + 1) % MAX_CACHE_SIZE;
     }
-    if(cache[cache_clock_pointer].dirty)
-    {
+    // if(cache[cache_clock_pointer].dirty)
+    // {
         block_write(fs_device, cache[cache_clock_pointer].sector, cache[cache_clock_pointer].bounce_buffer);
         cache[cache_clock_pointer].dirty = 0;
-    }
+    // }
     memset(cache[cache_clock_pointer].bounce_buffer, 0, BLOCK_SECTOR_SIZE);
     cache[cache_clock_pointer].in_use = 0;
     cache[cache_clock_pointer].sector = -1;

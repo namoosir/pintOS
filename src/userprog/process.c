@@ -357,7 +357,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Open executable file. */
   sema_down(&file_modification_sema);
-  file = filesys_open (actual_name, dir_reopen(thread_current()->current_dir));
+  if(!strcmp(actual_name, "tar"))
+  {
+    file = filesys_open_fsutil(actual_name);
+  }
+  else
+  {
+    file = filesys_open (actual_name, dir_reopen(thread_current()->current_dir));
+  }
+  
   sema_up(&file_modification_sema);
 
   if (file == NULL) 

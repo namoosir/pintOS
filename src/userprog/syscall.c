@@ -287,7 +287,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if (syscall_number == SYS_WRITE)
   {
-    printf("write\n");
+    // printf("write\n");
     if (bad_ptr_arg(args[1]))
     {
       exit(-1);
@@ -360,7 +360,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if (syscall_number == SYS_CREATE)
   {
-    printf("create\n");
+    // printf("create\n");
     // ensure that argument is a valid pointer
     if (bad_ptr_arg(args[0]) || (int)args[1] < 0)
     {
@@ -416,7 +416,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     if (new_dir == NULL)
     {
       free_path_array(path_array);
-      // free(file_to_create);
+      free(file_to_create);
       f->eax = 0;
     }
     // else if (dir_is_inode_removed(new_dir))
@@ -443,7 +443,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if (syscall_number == SYS_REMOVE)
   {
-    printf("remove\n");
+    // printf("remove\n");
     // ensure that argument is a valid pointer
     if (bad_ptr_arg(args[0]))
     {
@@ -526,12 +526,12 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = success;
 
       free_path_array(path_array);
-      // free(file_to_open);
+      free(file_to_remove);
     }
   }
   else if (syscall_number == SYS_OPEN)
   {
-    printf("open\n");
+    // printf("open\n");
     if (bad_ptr_arg(args[0]))
     {
       exit(-1);
@@ -619,7 +619,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   //TODO: MIGHT HAVE TO CHANGE
   else if(syscall_number == SYS_CLOSE)
   {
-    printf("close\n");
+    // printf("close\n");
     if (args[0] != 0 && args[0] != 1 && args[0] < MAX_FILE_DESCRIPTORS && args[0] > 0)
     {
       if (thread_current()->fd_array[args[0]] != NULL) 
@@ -641,7 +641,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if (syscall_number == SYS_READ)
   {
-    printf("read\n");
+    // printf("read\n");
     if (bad_ptr_arg(args[1]))
     {
       exit(-1);
@@ -862,7 +862,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if(syscall_number == SYS_CHDIR)
   {
-    printf("changedir\n");
+    // printf("changedir\n");
     char* path = (char*)args[0];
     if(path == NULL)
     {
@@ -903,7 +903,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
   else if (syscall_number == SYS_MKDIR)
   {
-    printf("mkdir\n");
+    // printf("mkdir\n");
     char* path = (char*)args[0];
 
     if (path == NULL) 
@@ -913,7 +913,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
 
     char **path_array = parse_path(path);
-    printf("make %s\n", path_array[0]);
+    // printf("make %s\n", path_array[0]);
 
     if (path_array == NULL)
     {
@@ -921,7 +921,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       return;
     }
 
-    printf("path array %s, %s\n", path_array[0], path_array[1]);
+    // printf("path array %s, %s\n", path_array[0], path_array[1]);
     struct dir* new_dir = dir_path_open(path_array);
     if (new_dir != NULL) 
     {
@@ -931,34 +931,34 @@ syscall_handler (struct intr_frame *f UNUSED)
       return;
     }
     // dir_close(new_dir);
-    printf("after check\n");
+    // printf("after check\n");
 
     char *dir_to_create = (char*)malloc(sizeof(path_array[0]));
     if(dir_to_create == NULL)
     {
-      printf("MALLOC FAIL\n");
+      // printf("MALLOC FAIL\n");
     }
-    printf("after malloc %p\n", dir_to_create);
-    printf("path array before while %s %s\n", path_array[0], path_array[1]);
+    // printf("after malloc %p\n", dir_to_create);
+    // printf("path array before while %s %s\n", path_array[0], path_array[1]);
 
     
     int i = 0;
     while ((int)path_array[i][0] != 0)
     {
-      printf("inside\n");
+      // printf("inside\n");
       i++;
     }
     i--;
 
-    printf("after while\n");
+    // printf("after while\n");
 
     int size = strlen(path_array[i]) + 1;
-    printf("size %d\n", size);
+    // printf("size %d\n", size);
     strlcpy(dir_to_create, path_array[i], size);
-    printf("after strcpy %s, %s\n", dir_to_create, path_array[i]);
+    // printf("after strcpy %s, %s\n", dir_to_create, path_array[i]);
     
     memset(path_array[i], 0, size);
-    printf("after memset %s, %s\n", dir_to_create, path_array[i]);
+    // printf("after memset %s, %s\n", dir_to_create, path_array[i]);
 
     bool used_curr_thread_dir = false;
 
@@ -984,26 +984,26 @@ syscall_handler (struct intr_frame *f UNUSED)
     // }
     else
     {
-      printf("mkdir final else\n");
+      // printf("mkdir final else\n");
       sema_down(&file_modification_sema);
-      printf("1\n");
+      // printf("1\n");
       if (filesys_create(dir_to_create, 0, new_dir, false)) f->eax = 1;
       else f->eax = 0;
-      printf("2\n");
+      // printf("2\n");
 
       // if (!used_curr_thread_dir) dir_close(new_dir);
       sema_up(&file_modification_sema);
-      printf("3\n");
+      // printf("3\n");
 
-      // free(dir_to_create);
+      free(dir_to_create);
       free_path_array(path_array);
-      printf("4\n");
+      // printf("4\n");
 
     }
   }
   else if (syscall_number == SYS_READDIR)
   {
-    printf("readdir\n");
+    // printf("readdir\n");
     if (args[0] != 0 && args[0] != 1 && args[0] < MAX_FILE_DESCRIPTORS && args[0] > 0) 
     {
       // printf("hello\n");
@@ -1024,7 +1024,7 @@ syscall_handler (struct intr_frame *f UNUSED)
             // if (sizeof(args[1])/sizeof(char) == READDIR_MAX_LEN + 1)
             // {
               f->eax = dir_readdir(dir, (char *)args[1]);
-              printf("READ THIS:: %s\n", (char*)args[1]);
+              // printf("READ THIS:: %s\n", (char*)args[1]);
               return;
             
           }

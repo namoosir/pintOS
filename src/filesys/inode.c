@@ -7,6 +7,8 @@
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
 #include "cache.h"
+#include "threads/thread.h"
+#include "filesys/directory.h"
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
@@ -45,6 +47,7 @@ struct inode
     struct inode_disk data;             /* Inode content. */
     struct dir* parent_dir;
     int containing_items;
+    struct semaphore inode_sema;
   };
 
 /* Returns the block device sector that contains byte offset POS
@@ -270,6 +273,7 @@ inode_open (block_sector_t sector)
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
+  sema_init(&inode->inode_sema, 1);
   // block_read (fs_device, inode->sector, &inode->data);
   if (cache_lookup(inode->sector)) 
     cache_retrieve(inode->sector, &inode->data, 0, 0, BLOCK_SECTOR_SIZE);
@@ -455,6 +459,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
           // if (cache_lookup(sector_idx)) 
             // cache_retrieve(sector_idx, (uint8_t *)buffer, bytes_written, sector_ofs, chunk_size);
           // else
+          // printf("INODE WRITE AT SECTOR %d, Current Thread: %s\n", sector_idx, thread_current()->name);
             cache_add(sector_idx, (uint8_t *)buffer, bytes_written, sector_ofs, chunk_size, CACHE_WRITE);
         //   block_write (fs_device, sector_idx, buffer + bytes_written); // cache_add(sector_idx, buffer, bytes_read, WRITE);
         // }
@@ -492,6 +497,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 void
 file_grow(struct inode *inode, int grow_to_length)
 {
+  sema_down(&inode->inode_sema);
   struct inode_disk disk_inode = inode->data;
   
   int required_sectors = bytes_to_sectors(grow_to_length);
@@ -566,6 +572,7 @@ file_grow(struct inode *inode, int grow_to_length)
   disk_inode.length = grow_to_length; //BLOCK_SECTOR_SIZE*(required_sectors - 1) + required_sectors % BLOCK_SECTOR_SIZE;
   inode->data = disk_inode; 
   cache_add(inode->sector, &disk_inode, 0, 0, BLOCK_SECTOR_SIZE, CACHE_WRITE);
+  sema_up(&inode->inode_sema);
 }
 
 /* Disables writes to INODE.
@@ -635,4 +642,24 @@ void
 inode_initialize_containing_dirs(struct inode* inode)
 {
   inode->containing_items = 0;
+}
+
+/* Down the inode_sema for given inode */
+void
+inode_sema_down (struct inode *inode) 
+{
+  sema_down(&inode->inode_sema);
+}
+
+/* Up the inode_sema for given inode */
+void
+inode_sema_up (struct inode *inode) 
+{
+  sema_up(&inode->inode_sema);
+}
+
+int
+inode_sema_value (struct inode *inode) 
+{
+  return inode->inode_sema.value;
 }

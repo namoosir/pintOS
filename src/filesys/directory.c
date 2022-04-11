@@ -7,6 +7,7 @@
 #include "threads/malloc.h"
 #include "threads/thread.h"
 #include "filesys/inode.h"
+#include "threads/interrupt.h"
 
 #define MAX_SUB_DIRS 30
 
@@ -170,6 +171,8 @@ dir_is_inode_removed(struct dir* dir)
   }
 }
 
+
+
 //TODO: MAKE THIS FUNCTION WORK
 void
 free_path_array(char **path_array)
@@ -179,12 +182,18 @@ free_path_array(char **path_array)
   // {
   //   printf("Arr:: %s\n", path_array[i]);
   // }
+  // enum intr_level old_level = intr_disable ();
   // for(int i = 0; i < MAX_SUB_DIRS; i++)
   // {
-  //   printf("loop\n");
-  //   free(path_array[i]);
+  //   // printf("loop\n");
+  //   // if(path_array[i][0] != 0)
+  //   // {
+  //     free(path_array[i]);
+  //   // }
+  //   // free(path_array[i]);
   // }
   // free(path_array);
+  // intr_set_level (old_level);
 }
 
 /* Creates a directory with space for ENTRY_CNT entries in the
@@ -248,6 +257,9 @@ dir_get_inode (struct dir *dir)
 {
   return dir->inode;
 }
+
+
+
 
 /* Searches DIR for a file with the given NAME.
    If successful, returns true, sets *EP to the directory entry
@@ -338,6 +350,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   e.in_use = true;
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
+  // printf("DIR ADD: %s\n", e.name);
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
   inode_increment_containing_dirs(dir->inode);
 

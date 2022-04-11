@@ -29,4 +29,7 @@ void inode_decrement_containing_dirs(struct inode* inode);
 void inode_increment_containing_dirs(struct inode* inode);
 int inode_get_containing_dirs(struct inode* inode);
 void inode_initialize_containing_dirs(struct inode* inode);
+void inode_sema_down (struct inode *inode);
+void inode_sema_up (struct inode *inode);
+int inode_sema_value (struct inode *inode);
 #endif /* filesys/inode.h */

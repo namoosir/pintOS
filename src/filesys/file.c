@@ -20,13 +20,19 @@ file_open (struct inode *inode)
   struct file *file = calloc (1, sizeof *file);
   if (inode != NULL && file != NULL)
     {
+      
       file->inode = inode;
       file->pos = 0;
       file->deny_write = false;
+
+      // printf("INODE: %p, & FILE: %p, NOT NULL in file_open PASS\n", inode, file);
+      // printf("ROOT DIR INODE:: %p\n",dir_get_inode(dir_open_root()));
+      // printf("OPENED\n");
       return file;
     }
   else
     {
+      // printf("INODE: %p, & FILE: %p, NULL in file_open FAIL\n", inode, file);
       inode_close (inode);
       free (file);
       return NULL; 

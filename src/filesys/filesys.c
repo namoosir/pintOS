@@ -28,6 +28,11 @@ filesys_init (bool format)
 
   if (format) 
     do_format ();
+  
+  struct dir *root = dir_open_root();
+  save_parent_dir(root, root->inode);
+  inode_initialize_containing_dirs(root->inode);
+  dir_close (root);
 
   free_map_open ();
 }
@@ -37,8 +42,9 @@ filesys_init (bool format)
 void
 filesys_done (void) 
 {
-  free_map_close ();
   cache_write_back_all();
+  free_map_close ();
+  
 }
 
 /* Creates a file named NAME with the given INITIAL_SIZE.
@@ -48,32 +54,42 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size, struct dir* dir, bool is_file) 
 {
+  // print all input parameters
+  // printf("filesys_create: name: %s, initial_size: %d, dir: %p, is_file: %d\n", name, initial_size, dir, is_file);
   block_sector_t inode_sector = 0;
   // struct dir *dir = dir_open_root ();
+  if(inode_sema_value(dir->inode) ==0)
+    inode_sema_down(dir->inode);
+  
   bool success = (dir != NULL
                   && !inode_is_removed(dir->inode)
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size, is_file)
                   && dir_add (dir, name, inode_sector));
-  printf("success %d\n", success);
+  if(inode_sema_value(dir->inode) !=0 )
+    inode_sema_up(dir->inode);
+  // printf("success %d\n", success);
+  // printf("filesys_create: %s\n", name);
   if (success)
   {
+    // printf("filesys_create: %s\n", name);
     struct inode *inode = NULL;
-    printf("before lookup\n");
+    // printf("before lookup\n");
     dir_lookup(dir, name, &inode);
-    printf("after lookup\n");
+    // printf("after lookup\n");
+    // printf("dir: %p, name: %s, inode: %p\n", dir, name, inode);
 
     save_parent_dir(dir, inode);
-    printf("after save parent\n");
+    // printf("after save parent\n");
     inode_initialize_containing_dirs(inode);
-    printf("after inode init\n");
+    // printf("after inode init\n");
   }
   
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
-  printf("before dir close\n");
+  // printf("before dir close\n");
   dir_close (dir);
-  printf("after dir close\n");
+  // printf("after dir close\n");
 
   return success;
 }
@@ -103,15 +119,62 @@ filesys_open (const char *name, struct dir* dir)
   // struct dir *dir = dir_open_root ();
   // struct dir *dir = dir_reopen(thread_current()->current_dir);
   struct inode *inode = NULL;
-
+  // printf("filesys_open: %s\n", name);
   if (dir != NULL)
     dir_lookup (dir, name, &inode);
   dir_close (dir);
 
   if (inode != NULL && !inode_is_removed(inode))
+  {
+    // printf("OPENED\n");
     return file_open (inode);
+  }
+    
   else
     return NULL;
+}
+
+struct file *
+filesys_open_fsutil (const char *name)
+{
+  // printf("filesys_open_fsutil: %s\n", name);
+  struct dir *dir = dir_open_root ();
+  struct inode *inode = NULL;
+
+  if (dir != NULL)
+    dir_lookup (dir, name, &inode);
+  dir_close (dir);
+
+  return file_open (inode);
+}
+
+bool
+filesys_create_fsutil (const char *name, off_t initial_size) 
+{
+  block_sector_t inode_sector = 0;
+  struct dir *dir = dir_open_root ();
+  // printf("filesys_create_fsutil: %s\n", name);
+  bool success = (dir != NULL
+                  && free_map_allocate (1, &inode_sector)
+                  && inode_create (inode_sector, initial_size, true)
+                  && dir_add (dir, name, inode_sector));
+  if (!success && inode_sector != 0) 
+    free_map_release (inode_sector, 1);
+  dir_close (dir);
+
+  return success;
+}
+
+bool
+filesys_remove_fsutil (const char *name) 
+{
+
+  struct dir *dir = dir_open_root ();
+  // printf("filesys_remove_fsutil: %s\n", name);
+  bool success = dir != NULL && dir_remove (dir, name);
+  dir_close (dir); 
+
+  return success;
 }
 
 /* Deletes the file named NAME.
@@ -198,10 +261,10 @@ do_format (void)
   if (!dir_create (ROOT_DIR_SECTOR, 16))
     PANIC ("root directory creation failed");
 
-  struct dir *root = dir_open_root();
-  save_parent_dir(root, root->inode);
-  inode_initialize_containing_dirs(root->inode);
-  dir_close (root);
+  // struct dir *root = dir_open_root();
+  // save_parent_dir(root, root->inode);
+  // inode_initialize_containing_dirs(root->inode);
+  // dir_close (root);
 
   free_map_close ();
   printf ("done.\n");
