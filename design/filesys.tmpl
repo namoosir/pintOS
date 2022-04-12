@@ -232,7 +232,7 @@ This thread then exits after performing the reading operation.
 
 In our current implementation we lock the entire cache when evicting, so only one thread can 
 evict from the cache at a time. But, if there is a thread that is reading or writing then 
-no other thread can evict the block since the entire cache will be locked.
+no other thread can evict the block since we check if the read/write semaphores are downed.
 
 A better way to implement this would be to keep track of the number of processes that are 
 using the block via some counter and only evict if that count is 0. If the count is 
