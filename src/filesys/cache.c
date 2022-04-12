@@ -53,7 +53,6 @@ bool
 cache_lookup(block_sector_t sector)
 {
     sema_down(&buffer_cache_sema);
-
     for (int i = 0; i < MAX_CACHE_SIZE; i++)
     {
         if (cache[i].sector == sector)
@@ -64,15 +63,6 @@ cache_lookup(block_sector_t sector)
             return true;
         }
     }
-    // if(strcmp(thread_current()->name, "read_ahead") == 0){
-    //     printf("thread name::::: %s\n",thread_current()->name);
-    //     // sema_up(&buffer_cache_sema);
-    //     // used_cache_size++;
-    //     sema_up(&buffer_cache_sema);
-    //     sema_up(&read_ahead_sema);
-    //     thread_exit();
-    //     // sema_up(&read_ahead_sema);
-    // }
     sema_up(&buffer_cache_sema);
     return false;
 }
@@ -81,37 +71,29 @@ void
 cache_retrieve(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int sector_ofs, int chunk_size)
 {
     sema_down(&buffer_cache_sema);
-    // printf("down 57\n");
     
     for (int i = 0; i < MAX_CACHE_SIZE; i++) 
     {
         if (cache[i].sector == sector) 
         {
-            // sema_down(&cache[i].cache_entry_sema);
             memcpy(buffer + bytes_read_or_write, cache[i].bounce_buffer + sector_ofs, chunk_size);
-            // sema_up(&cache[i].cache_entry_sema);
             break;
         }
     }
     sema_up(&buffer_cache_sema);
-    // printf("up 71\n");
 }
 
 void
 cache_write_back_all(void)
 {
     sema_down(&buffer_cache_sema);
-    // printf("down 84\n");
 
     for(int i = 0; i < MAX_CACHE_SIZE; i++)
     {
 
         if (cache[i].dirty)
         {
-            // printf("cache_write_back_all: writing back sector %d\n", cache[i].sector);
-            // sema_down(&file_modification_sema);
             block_write(fs_device, cache[i].sector, cache[i].bounce_buffer);
-            // sema_up(&file_modification_sema);
         }
         memset(cache[i].bounce_buffer, 0, BLOCK_SECTOR_SIZE);
         cache[i].in_use = 0;
@@ -121,7 +103,6 @@ cache_write_back_all(void)
 
     }
     sema_up(&buffer_cache_sema);
-    // printf("up 100\n");
 }
 
 void
@@ -129,15 +110,13 @@ cache_evict(void)
 {
     //Evict the cache entry using the clock algorithm
     sema_down(&buffer_cache_sema);
-    // printf("down 105\n");
 
     while(cache[cache_clock_pointer].accessed == 1)
     {
         cache[cache_clock_pointer].accessed = 0;
         cache_clock_pointer = (cache_clock_pointer + 1) % MAX_CACHE_SIZE;
     }
-    // if(cache[cache_clock_pointer].dirty)
-    // {
+
     if(cache[cache_clock_pointer].cache_entry_modification_sema.value != 0)
     {
         sema_down(&cache[cache_clock_pointer].cache_entry_modification_sema);
@@ -151,9 +130,8 @@ cache_evict(void)
         sema_down(&cache[cache_clock_pointer].cache_entry_read_sema);
     }
 
-        block_write(fs_device, cache[cache_clock_pointer].sector, cache[cache_clock_pointer].bounce_buffer);
-        cache[cache_clock_pointer].dirty = 0;
-    // }
+    block_write(fs_device, cache[cache_clock_pointer].sector, cache[cache_clock_pointer].bounce_buffer);
+    cache[cache_clock_pointer].dirty = 0;
     memset(cache[cache_clock_pointer].bounce_buffer, 0, BLOCK_SECTOR_SIZE);
     cache[cache_clock_pointer].in_use = 0;
     cache[cache_clock_pointer].sector = -1;
@@ -178,12 +156,11 @@ void
 cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int sector_ofs, int chunk_size, enum add_flag flag)
 {
     if (sector > 4096) exit(-1);
-    // printf("\nCACHE ADD SECTOR::%u, write %d\n", sector, flag);
     for (int i = 0; i < MAX_CACHE_SIZE; i++) 
     {
         if (cache[i].sector == sector && flag == CACHE_WRITE && cache[i].in_use == 1)
         {
-            // sema_down(&buffer_cache_sema);
+            sema_down(&buffer_cache_sema);
             sema_down(&cache[i].cache_entry_write_sema);
 
             // printf("down 111\n");
@@ -210,10 +187,9 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
                 // sema_up(&buffer_cache_sema);
                 // printf("up 135\n");
             }
-            // sema_up(&buffer_cache_sema);
+            
             sema_up(&cache[i].cache_entry_write_sema);
-
-
+            sema_up(&buffer_cache_sema);
             return;
         }
     }
@@ -229,7 +205,7 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
     {
         if (cache[i].in_use == 0)
         {
-            // sema_down(&buffer_cache_sema);
+            sema_down(&buffer_cache_sema);
             // printf("down 167\n");
             sema_down(&cache[i].cache_entry_modification_sema);
             cache[i].sector = sector;
@@ -254,33 +230,6 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
                 {
                     sema_up(&cache[i].cache_entry_read_sema);
                 }
-                // sema_up(&cache[i].cache_entry_modification_sema);
-                // struct thread *cur = thread_current();
-                // if (strcmp(thread_current()->name, "read_ahead") != 0)
-                // {
-                //     // printf("thread name: %s\n",thread_current()->name);
-                //     // used_cache_size++;
-                //     sema_up(&buffer_cache_sema);
-                //     // sema_down(&read_ahead_sema);
-                //     cache_perform_read_ahead(sector);
-                //     sema_down(&buffer_cache_sema);
-                    
-                    
-                //     // sema_down(&buffer_cache_sema);
-                // }else{
-                //     // printf("thread name::::: %s\n",thread_current()->name);
-                //     // sema_up(&buffer_cache_sema);
-                //     used_cache_size++;
-                //     sema_up(&buffer_cache_sema);
-                //     sema_up(&read_ahead_sema);
-                //     thread_exit();
-                    
-                //     // sema_up(&read_ahead_sema);
-                    
-                //     return;
-
-                // }
-                
             }
             else if (flag == CACHE_WRITE)
             {
@@ -306,45 +255,12 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
                     else
                         memset(cache[i].bounce_buffer, 0, BLOCK_SECTOR_SIZE);
                     memcpy(cache[i].bounce_buffer + sector_ofs, buffer + bytes_read_or_write, chunk_size);
-
-                    // sema_up(&buffer_cache_sema);
                 }
-                // block_write (fs_device, sector, &cache[i].bounce_buffer);
                 sema_up(&cache[i].cache_entry_write_sema);
-                // sema_up(&cache[i].cache_entry_modification_sema);
 
             }
             used_cache_size++;
-            // sema_up(&buffer_cache_sema);
-            // if(flag == CACHE_READ)
-            // {
-            //     if (strcmp(thread_current()->name, "read_ahead") != 0)
-            //     {
-            //         // printf("thread name: %s\n",thread_current()->name);
-            //         // used_cache_size++;
-            //         // sema_up(&buffer_cache_sema);
-            //         // sema_down(&read_ahead_sema);
-            //         cache_perform_read_ahead(sector);
-            //         // sema_down(&buffer_cache_sema);
-                    
-                    
-            //         // sema_down(&buffer_cache_sema);
-            //     }else if(strcmp(thread_current()->name, "read_ahead") == 0){
-            //         // printf("thread name::::: %s\n",thread_current()->name);
-            //         // sema_up(&buffer_cache_sema);
-            //         used_cache_size++;
-            //         sema_up(&buffer_cache_sema);
-            //         sema_up(&read_ahead_sema);
-            //         thread_exit();
-                    
-            //         // sema_up(&read_ahead_sema);
-                    
-            //         return;
-
-            //     }
-            // }
-            // printf("Up 208\n");
-            // sema_up(&cache[i].cache_entry_sema);
+            sema_up(&buffer_cache_sema);
             break;
         }
     }

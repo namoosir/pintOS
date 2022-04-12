@@ -103,6 +103,8 @@ we chose this structure since it makes file creation and growth more efficient.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+We only moved the dir struct to the directory.h file.
+
 ---- ALGORITHMS ----
 
 >> B2: Describe your code for traversing a user-specified path.  How
@@ -161,6 +163,35 @@ the current directory of the thread if needed easily.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+static struct cache_entry cache[MAX_CACHE_SIZE]; // The cache array
+static int cache_clock_pointer = 0; // Pointer for the clock algorithm
+static int used_cache_size; // The number of entires we are using in the cache
+
+// Stores info about a block in the buffer cache.
+struct cache_entry
+{
+    uint8_t bounce_buffer[BLOCK_SECTOR_SIZE]; // bounce buffer for reading and writing
+    block_sector_t sector; // sector number of the block
+    int accessed; // if the block has been accessed or not
+    int in_use; // if the block is in use or not
+    int dirty; // if the block has been modified or not
+    struct semaphore cache_entry_read_sema; // semaphore for reading
+    struct semaphore cache_entry_write_sema; // semaphore for writing
+    struct semaphore cache_entry_modification_sema; // semaphore for modifying an entry
+};
+
+// An enum to see if we are reading or writing
+enum add_flag
+{
+    CACHE_READ,
+    CACHE_WRITE
+};
+
+// A semaphore to block the whole cache
+struct semaphore buffer_cache_sema;
+struct semaphore read_ahead_sema;
+
+
 ---- ALGORITHMS ----
 
 >> C2: Describe how your cache replacement algorithm chooses a cache
@@ -201,9 +232,11 @@ more than 0 then we dont evict the block.
 >> C6: During the eviction of a block from the cache, how are other
 >> processes prevented from attempting to access the block?
 
+When adding to the cache, we use per block synchronization in the cache. By locking only the block 
+when reading or writing.
 We lock the entire cache so there is no way another process can access the block during eviction.
 
-A better way of implementing this would be to have a semaphore for each cache entry.
+A better way of implementing this would be to also use per block synchronization for eviction.
 This way we if a process is evicting, we can lock that cache entry and prevent more threads 
 from accessing the it.
 

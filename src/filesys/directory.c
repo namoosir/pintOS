@@ -177,6 +177,7 @@ dir_is_inode_removed(struct dir* dir)
 void
 free_path_array(char **path_array)
 {
+  path_array = NULL; // Disabled function
   // printf("in here %s\n", path_array[0]);
   // for(int i = 0; i < MAX_SUB_DIRS; i++)
   // {
