@@ -6,14 +6,14 @@
 
 struct cache_entry
 {
-    uint8_t bounce_buffer[BLOCK_SECTOR_SIZE];
-    block_sector_t sector;
-    int accessed;
-    int in_use;
-    int dirty;
-    struct semaphore cache_entry_read_sema;
-    struct semaphore cache_entry_write_sema;
-    struct semaphore cache_entry_modification_sema;
+    uint8_t bounce_buffer[BLOCK_SECTOR_SIZE];               /* Buffer that stores the contents of sector */
+    block_sector_t sector;                                  /* Sector number corresponding to this cache entry */
+    int accessed;                                           /* Accessed bit */
+    int in_use;                                             /* Whether cache entry is in use or not */
+    int dirty;                                              /* Dirty bit */
+    struct semaphore cache_entry_read_sema;                 /* Read semaphore for this cache entry */
+    struct semaphore cache_entry_write_sema;                /* Write semaphore for this cache entry */
+    struct semaphore cache_entry_modification_sema;         /* Semaphore for modifying an entry */
 };
 
 enum add_flag

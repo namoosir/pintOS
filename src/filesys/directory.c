@@ -19,17 +19,17 @@ struct dir_entry
     bool in_use;                        /* In use or free? */
   };
 
-bool dir_is_inode_removed(struct dir* dir);
+bool dir_is_inode_removed(struct dir* dir); /*Function to check if inode for dir is removed*/
 
 
-/* Parse path and store in array
-    This algorithm is partially based off of:
-    https://www.tutorialspoint.com/c_standard_library/c_function_strtok.htm
+/* 
+  Split path by "/" and store in array
+  This algorithm is partially based off of:
+  https://www.tutorialspoint.com/c_standard_library/c_function_strtok.htm
  */
 char **
 parse_path (const char *path)
 {
-  // printf("malloc\n");
   size_t path_len = strlen(path);
   if (path_len == 0) return NULL;
   if (path_len > (NAME_MAX+1)*MAX_SUB_DIRS) return NULL;
@@ -59,7 +59,6 @@ parse_path (const char *path)
   char *path_copy = malloc (NAME_MAX + 1);
   if (path_copy == NULL)
   {
-    // printf("END OF PARSE PATH::PATH CPY NULL\n");
     return NULL;
   }
   strlcpy (path_copy, path, NAME_MAX + 1);
@@ -70,15 +69,13 @@ parse_path (const char *path)
     i++;
     token = strtok_r (NULL, "/", &path_copy);
   }
-  // printf("END OF PARSE PATH\n");
-  // free(path_copy); // May not be able to free here?
-  // for(int j = 0; j < 5; j++)
-  // {
-  //   printf("Path_Array:: %s\n", path_array[j]);
-  // }
   return path_array;
 }
 
+/*
+  Opens and returns the next directory with name next_dir_name if 
+  it exists in the start_dir.
+*/
 struct dir*
 dir_next_in_path(struct dir* start_dir, char* next_dir_name, struct inode* dir_inode)
 {
@@ -96,6 +93,12 @@ dir_next_in_path(struct dir* start_dir, char* next_dir_name, struct inode* dir_i
   }
 }
 
+/*
+  Goes through each name in the path_array and opens that directory.
+  For .. we open the parent dir
+  For . we dont open any new dir and contiure the traversal with the next 
+  name in the path_array.
+*/
 struct dir*
 dir_traverse(struct dir* start_dir, char** path_array, struct inode* dir_inode)
 {
@@ -105,16 +108,9 @@ dir_traverse(struct dir* start_dir, char** path_array, struct inode* dir_inode)
   
   while((int)path_array[i][0] != 0)
     {
-      // printf("in while loop\n");
       if (strcmp(path_array[i], "..") == 0)
       {
         start_dir = get_parent_dir(start_dir);
-        // struct dir *root = dir_open_root();
-        // if (i-1 != -1 && root != start_dir)
-        // {
-        //   start_dir = dir_next_in_path(start_dir, path_array[i-1], dir_inode);
-        // }
-        // if (start_dir != root) dir_close(root);
       }
       else if (strcmp(path_array[i], ".") == 0)
       {
@@ -132,6 +128,12 @@ dir_traverse(struct dir* start_dir, char** path_array, struct inode* dir_inode)
     return start_dir;
 }
 
+/*
+  Opens the directory at the given file.
+  Checks if the path is absolute or relative and 
+  starts the traversal from the root for absolute paths 
+  and current working dir for relative paths.
+*/
 struct dir*
 dir_path_open(char **path_array)
 {
@@ -157,6 +159,9 @@ dir_path_open(char **path_array)
   return start_dir;
 }
 
+/*
+  Checks if the dir is removed or not.
+*/
 bool
 dir_is_inode_removed(struct dir* dir)
 {
@@ -173,28 +178,17 @@ dir_is_inode_removed(struct dir* dir)
 
 
 
-//TODO: MAKE THIS FUNCTION WORK
+/*
+  Unimplemented: Tried to free the path array
+*/
 void
 free_path_array(char **path_array)
 {
   path_array = NULL; // Disabled function
-  // printf("in here %s\n", path_array[0]);
-  // for(int i = 0; i < MAX_SUB_DIRS; i++)
-  // {
-  //   printf("Arr:: %s\n", path_array[i]);
-  // }
-  // enum intr_level old_level = intr_disable ();
-  // for(int i = 0; i < MAX_SUB_DIRS; i++)
-  // {
-  //   // printf("loop\n");
-  //   // if(path_array[i][0] != 0)
-  //   // {
-  //     free(path_array[i]);
-  //   // }
-  //   // free(path_array[i]);
-  // }
-  // free(path_array);
-  // intr_set_level (old_level);
+  if(false)
+  {
+    free(path_array);
+  }
 }
 
 /* Creates a directory with space for ENTRY_CNT entries in the
@@ -258,9 +252,6 @@ dir_get_inode (struct dir *dir)
 {
   return dir->inode;
 }
-
-
-
 
 /* Searches DIR for a file with the given NAME.
    If successful, returns true, sets *EP to the directory entry

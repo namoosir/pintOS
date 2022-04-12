@@ -8,23 +8,16 @@
 #include "threads/thread.h"
 #include "userprog/syscall.h"
 
-#define MAX_CACHE_SIZE 64
+#define MAX_CACHE_SIZE 64 
 #define LOWEST_ADDR ((void *) 0x08048000)
 
-static struct cache_entry cache[MAX_CACHE_SIZE];
-static int cache_clock_pointer = 0;
-static int used_cache_size;
+static struct cache_entry cache[MAX_CACHE_SIZE]; /* Cache array */
+static int cache_clock_pointer = 0; /* Clock pointer for clock algorithm */
+static int used_cache_size; /* The number of items used in the cache. */
 
-
-struct inode_disk
-  {
-    block_sector_t blocks[12];
-    // block_sector_t start;            /* First data sector. */
-    off_t length;                       /* File size in bytes. */
-    unsigned magic;                     /* Magic number. */
-    uint32_t unused[114];               /* Not used. */    
-  };
-
+/* 
+    Initializes all the entries in the cache.
+*/
 void 
 cache_init(void)
 {
@@ -45,10 +38,6 @@ cache_init(void)
     Return true if sector has been added to cache
     and false otherwise.
 */
-//TODO: might need to modify this to take read/write flag
-//      and if it is a write flag then compare the actual 
-//      buffer contents with sent in buffer and return true 
-//      if the contents are the same 
 bool 
 cache_lookup(block_sector_t sector)
 {
@@ -67,6 +56,9 @@ cache_lookup(block_sector_t sector)
     return false;
 }
 
+/*
+    Retrives the contents in the cache entry based on the sector.
+*/
 void
 cache_retrieve(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int sector_ofs, int chunk_size)
 {
@@ -83,6 +75,10 @@ cache_retrieve(block_sector_t sector, void *buffer, int32_t bytes_read_or_write,
     sema_up(&buffer_cache_sema);
 }
 
+/*
+    Used to write back all dirty blocks from the cache to the block 
+    at the end when closing the file system.
+*/
 void
 cache_write_back_all(void)
 {
@@ -111,12 +107,20 @@ cache_evict(void)
     //Evict the cache entry using the clock algorithm
     sema_down(&buffer_cache_sema);
 
+    /*
+        Uses the clock algorithm to find a spot to evict.
+    */
     while(cache[cache_clock_pointer].accessed == 1)
     {
         cache[cache_clock_pointer].accessed = 0;
         cache_clock_pointer = (cache_clock_pointer + 1) % MAX_CACHE_SIZE;
     }
 
+    /*
+        Check if any of the semaphores for the block is being used.
+        If not, we should down the semaphore so nothing else can access the block 
+        when evicting.
+    */
     if(cache[cache_clock_pointer].cache_entry_modification_sema.value != 0)
     {
         sema_down(&cache[cache_clock_pointer].cache_entry_modification_sema);
@@ -129,7 +133,9 @@ cache_evict(void)
     {
         sema_down(&cache[cache_clock_pointer].cache_entry_read_sema);
     }
-
+    /*
+        Writes back the evicted item to the block sector.
+    */
     block_write(fs_device, cache[cache_clock_pointer].sector, cache[cache_clock_pointer].bounce_buffer);
     cache[cache_clock_pointer].dirty = 0;
     memset(cache[cache_clock_pointer].bounce_buffer, 0, BLOCK_SECTOR_SIZE);
@@ -152,12 +158,20 @@ cache_evict(void)
     sema_up(&buffer_cache_sema);
 }
 
+/*
+    Adds block sectors to the cache.
+    This function taks in a flag to know if it needs to read or write.
+*/
+
 void
 cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int sector_ofs, int chunk_size, enum add_flag flag)
 {
     if (sector > 4096) exit(-1);
     for (int i = 0; i < MAX_CACHE_SIZE; i++) 
     {
+        /*
+            If the sector is already being used in the cache, then we just update its bounce buffer.
+        */
         if (cache[i].sector == sector && flag == CACHE_WRITE && cache[i].in_use == 1)
         {
             sema_down(&buffer_cache_sema);
@@ -171,21 +185,14 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
             if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
             {
                 memcpy(cache[i].bounce_buffer, buffer + bytes_read_or_write, chunk_size);   
-                // sema_up(&buffer_cache_sema);
-                // printf("up 123\n");
             }
             else
             {
                 int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
 
-                // sema_down(&buffer_cache_sema);
-
                 if (!(sector_ofs > 0 || chunk_size < sector_left))
                     memset(cache[i].bounce_buffer, 0, BLOCK_SECTOR_SIZE);
                 memcpy(cache[i].bounce_buffer + sector_ofs, buffer + bytes_read_or_write, chunk_size);
-
-                // sema_up(&buffer_cache_sema);
-                // printf("up 135\n");
             }
             
             sema_up(&cache[i].cache_entry_write_sema);
@@ -194,6 +201,9 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
         }
     }
 
+    /* 
+        Perform eviction is the cache is full.
+    */
     if (used_cache_size == MAX_CACHE_SIZE) 
     {
         //eviction stuff
@@ -206,18 +216,17 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
         if (cache[i].in_use == 0)
         {
             sema_down(&buffer_cache_sema);
-            // printf("down 167\n");
             sema_down(&cache[i].cache_entry_modification_sema);
             cache[i].sector = sector;
             cache[i].in_use = 1;
             cache[i].accessed = 1;
             sema_up(&cache[i].cache_entry_modification_sema);
 
+            /*
+                Reads from the block sector into the cache.
+            */
             if(flag == CACHE_READ)
             {
-                // sema_down(&cache[i].cache_entry_modification_sema);
-                // cache[i].dirty = 0;//??????
-                // sema_up(&cache[i].cache_entry_modification_sema);
                 
                 if(cache[i].cache_entry_write_sema.value == 0)
                 {
@@ -231,25 +240,22 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
                     sema_up(&cache[i].cache_entry_read_sema);
                 }
             }
+            /* Read the buffer into the bounce buffer inside the cache 
+               This is write back beacuse we dont immedialty write our cache 
+               contents to the disk. We wait till eviction.
+            */
             else if (flag == CACHE_WRITE)
             {
-                // sema_down(&cache[i].cache_entry_modification_sema);
                 cache[i].dirty = 1;
-                // sema_up(&cache[i].cache_entry_modification_sema);
 
                 sema_down(&cache[i].cache_entry_write_sema);
                 if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
                 {
-                    // sema_down(&buffer_cache_sema);
                     memcpy(cache[i].bounce_buffer, buffer + bytes_read_or_write, chunk_size);   
-                    // sema_up(&buffer_cache_sema);
                 }
                 else
                 {
                     int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
-
-                    // sema_down(&buffer_cache_sema);
-
                     if (sector_ofs > 0 || chunk_size < sector_left)
                         block_read(fs_device, sector, cache[i].bounce_buffer);
                     else
@@ -266,6 +272,10 @@ cache_add(block_sector_t sector, void *buffer, int32_t bytes_read_or_write, int 
     }
 }
 
+/*
+    Attempt at the read ahead.
+    Uses cache add to read in the next block.
+*/
 void
 cache_read_ahead(void *next_block)
 {
@@ -274,23 +284,19 @@ cache_read_ahead(void *next_block)
     char buffer[BLOCK_SECTOR_SIZE];
     sema_down(&read_ahead_sema);
     if (!cache_lookup(next_block_read_ahead)){
-        // block_read(fs_device, next_block_read_ahead, buffer);
-        // printf("read ahead thread::: %s\n", thread_current()->name);
         cache_add(next_block_read_ahead, buffer, 0, 0, BLOCK_SECTOR_SIZE, CACHE_READ);
     }else{
-        // printf("read ahead thread else::: %s\n", thread_current()->name);
         sema_up(&buffer_cache_sema);
         free(next_block);
         sema_up(&read_ahead_sema);
         thread_exit();
     }
-        // cache_add(next_block_read_ahead, buffer, 0, 0, BLOCK_SECTOR_SIZE, CACHE_READ);
     free(next_block);
-    
-    
-    // thread_exit();
 }
 
+/*
+    Spwans new thread to do read ahead.
+*/
 void
 cache_perform_read_ahead(block_sector_t sector)
 {

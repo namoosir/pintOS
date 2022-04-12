@@ -29,6 +29,15 @@ Nazmus Saqeeb <nazmus.saqeeb@mail.utoronto.ca>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+struct inode_disk
+  {
+    block_sector_t blocks[NUMBER_BLOCKS]; /* Indexing of the file contents*/
+    ...
+    bool is_file;                       /* File or Directory */
+    uint32_t unused[113];               /* Not used. */    
+  };
+  
+
 >> A2: What is the maximum size of a file supported by your inode
 >> structure?  Show your work.
 
@@ -69,9 +78,8 @@ data that B is writing until B has finished writing.
 >> processes writing to a file cannot prevent another process forever
 >> from reading the file.
 
-Currently, we are just using a single for the entire buffer cache. This means that our cache is not 
-"fair" and will only let 1 thread access the entire buffer cache at a time.
-However, a better way of doing this to use a read lock and writing lock for each cache entry and only let the 
+
+We use a read lock and writing lock for each cache entry and only let the 
 thread block the entry that it needs to work with. This way other threads can access the same file and read and write 
 to the same block. So, by using per block synchronization we can make the cache "fair" and thus make the file 
 reading and writing "fair".
@@ -87,11 +95,12 @@ reading and writing "fair".
 Yes, our inode structure is multilevel index. We have 10 direct blocks, 
 1 indirect block and 1 double indirect block. We chose this structure because it is 
 efficient if we are dealing with small files. The 10 direct blocks can be indexed 
-quickly since we dont have to go through the extra step of finding a pointer to the 
-block. For medium sized files, we have to go through the indirect block but this since 
-it is indirect we have to throught just 1 level of pointers. For large files, we have 
-to go through the double indirect block, which is 2 levels of pointers. This gradual 
-increase in the amount of memory and pointer we have to go through is the reason why 
+quickly since we dont have to go through the extra step of reading from the hard
+drive. For medium sized files, we have to read from the hard drive some metadata 
+(the indirect block), to figure out which block the data is stored. For large files, we have 
+to go through the double indirect block, meaning it will require us to read the hard drive
+twice, once for each level of the double indirect file index. This gradual 
+increase in the amount of acceses to the hard drive is the reason why 
 we chose this structure since it makes file creation and growth more efficient.
 
                 SUBDIRECTORIES
@@ -221,8 +230,8 @@ This thread then exits after performing the reading operation.
 >> buffer cache block, how are other processes prevented from evicting
 >> that block?
 
-In our current implementation we lock the entire cache, so only one thread can 
-modify the cache at a time. If there is a thread that is reading or writing then 
+In our current implementation we lock the entire cache when evicting, so only one thread can 
+evict from the cache at a time. But, if there is a thread that is reading or writing then 
 no other thread can evict the block since the entire cache will be locked.
 
 A better way to implement this would be to keep track of the number of processes that are 

@@ -68,21 +68,17 @@ filesys_create (const char *name, off_t initial_size, struct dir* dir, bool is_f
                   && dir_add (dir, name, inode_sector));
   if(inode_sema_value(dir->inode) !=0 )
     inode_sema_up(dir->inode);
-  // printf("success %d\n", success);
-  // printf("filesys_create: %s\n", name);
+
+  /*
+    Once the file is created we initialize it and set the parent dir
+  */
   if (success)
   {
-    // printf("filesys_create: %s\n", name);
     struct inode *inode = NULL;
-    // printf("before lookup\n");
     dir_lookup(dir, name, &inode);
-    // printf("after lookup\n");
-    // printf("dir: %p, name: %s, inode: %p\n", dir, name, inode);
 
     save_parent_dir(dir, inode);
-    // printf("after save parent\n");
     inode_initialize_containing_dirs(inode);
-    // printf("after inode init\n");
   }
   
   if (!success && inode_sector != 0) 
@@ -116,14 +112,13 @@ filesys_open (const char *name, struct dir* dir)
     else
       return NULL;
   }
-  // struct dir *dir = dir_open_root ();
-  // struct dir *dir = dir_reopen(thread_current()->current_dir);
   struct inode *inode = NULL;
   // printf("filesys_open: %s\n", name);
   if (dir != NULL)
     dir_lookup (dir, name, &inode);
   dir_close (dir);
 
+  // Only open the file if its not removed and has an inode
   if (inode != NULL && !inode_is_removed(inode))
   {
     // printf("OPENED\n");
